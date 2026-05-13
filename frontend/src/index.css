@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+:root {
+  font-family:
+    "SF Pro Display", "Avenir Next", "Segoe UI", ui-sans-serif, system-ui,
+    sans-serif;
+  color: #223041;
+  background: #eef4fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+[data-theme='light'] {
+  --page-bg: #edf5fc;
+  --wash-a: #f4f8ff;
+  --wash-b: #edf9f2;
+  --wash-c: #fff2e9;
+  --glass-bg: rgba(255, 255, 255, 0.64);
+  --sidebar-bg: rgba(255, 255, 255, 0.58);
+  --soft-panel: rgba(255, 255, 255, 0.54);
+  --row-bg: rgba(255, 255, 255, 0.48);
+  --job-card-bg: rgba(255, 255, 255, 0.56);
+  --glass-border: rgba(255, 255, 255, 0.68);
+  --glass-shadow: 0 26px 70px rgba(106, 132, 164, 0.18);
+  --text-primary: #263447;
+  --text-muted: #78889a;
+  --active-nav: rgba(255, 255, 255, 0.82);
+  --active-text: #2e567d;
+  --nav-hover: rgba(255, 255, 255, 0.45);
+  --plan-a: rgba(202, 232, 255, 0.72);
+  --plan-b: rgba(255, 224, 207, 0.62);
+  --segmented-bg: rgba(255, 255, 255, 0.48);
+  --segmented-active: rgba(255, 255, 255, 0.86);
+  --input-bg: rgba(255, 255, 255, 0.58);
+  --input-border: rgba(255, 255, 255, 0.75);
+  --chip-bg: rgba(255, 255, 255, 0.52);
+  --chip-border: rgba(255, 255, 255, 0.72);
+  --live-bg: rgba(198, 240, 215, 0.72);
+  --live-text: #29724f;
+  --live-dot: #2fbb73;
+  --live-ring: rgba(63, 190, 118, 0.16);
+  --completed-bg: rgba(210, 244, 222, 0.76);
+  --completed-text: #28734d;
+  --completed-border: rgba(78, 185, 116, 0.18);
+  --progress-bg: rgba(223, 235, 255, 0.82);
+  --progress-text: #3d6da5;
+  --progress-border: rgba(101, 149, 216, 0.22);
+  --pending-bg: rgba(244, 246, 250, 0.72);
+  --pending-text: #8b97a4;
+  --pending-border: rgba(150, 162, 178, 0.16);
+  --score-text: #567fb0;
+  --accent-dot: #74a8e8;
+  --progress-track: rgba(255, 255, 255, 0.58);
+}
+
+[data-theme='dark'] {
+  --page-bg: #111821;
+  --wash-a: #121e2b;
+  --wash-b: #14251f;
+  --wash-c: #241b19;
+  --glass-bg: rgba(30, 39, 50, 0.66);
+  --sidebar-bg: rgba(29, 38, 49, 0.62);
+  --soft-panel: rgba(255, 255, 255, 0.07);
+  --row-bg: rgba(255, 255, 255, 0.06);
+  --job-card-bg: rgba(255, 255, 255, 0.075);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-shadow: 0 26px 70px rgba(0, 0, 0, 0.28);
+  --text-primary: #f1f6fb;
+  --text-muted: #a9b7c6;
+  --active-nav: rgba(255, 255, 255, 0.12);
+  --active-text: #d5e9ff;
+  --nav-hover: rgba(255, 255, 255, 0.08);
+  --plan-a: rgba(89, 130, 170, 0.34);
+  --plan-b: rgba(149, 104, 82, 0.26);
+  --segmented-bg: rgba(255, 255, 255, 0.07);
+  --segmented-active: rgba(255, 255, 255, 0.18);
+  --input-bg: rgba(255, 255, 255, 0.07);
+  --input-border: rgba(255, 255, 255, 0.13);
+  --chip-bg: rgba(255, 255, 255, 0.08);
+  --chip-border: rgba(255, 255, 255, 0.12);
+  --live-bg: rgba(70, 168, 111, 0.18);
+  --live-text: #9fe3b7;
+  --live-dot: #75d794;
+  --live-ring: rgba(117, 215, 148, 0.16);
+  --completed-bg: rgba(97, 185, 126, 0.16);
+  --completed-text: #b8e9c5;
+  --completed-border: rgba(126, 215, 157, 0.2);
+  --progress-bg: rgba(112, 164, 221, 0.17);
+  --progress-text: #bad8ff;
+  --progress-border: rgba(136, 183, 238, 0.22);
+  --pending-bg: rgba(255, 255, 255, 0.06);
+  --pending-text: #a3afbc;
+  --pending-border: rgba(255, 255, 255, 0.1);
+  --score-text: #cfe4ff;
+  --accent-dot: #9ccaff;
+  --progress-track: rgba(255, 255, 255, 0.1);
+}
+
+.priority {
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.priority-high {
+  background: rgba(255, 155, 138, 0.2);
+  color: #d66656;
+}
+
+.priority-medium {
+  background: rgba(255, 204, 128, 0.22);
+  color: #b67924;
+}
+
+.priority-low {
+  background: rgba(142, 204, 166, 0.2);
+  color: #4c9566;
+}
+
+[data-theme='dark'] .priority-high {
+  color: #ffb7ad;
+}
+
+[data-theme='dark'] .priority-medium {
+  color: #ffd399;
+}
+
+[data-theme='dark'] .priority-low {
+  color: #a8e7bc;
+}

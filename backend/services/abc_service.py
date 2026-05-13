@@ -1,0 +1,588 @@
+"""
+ABC-driven adaptive job recommendation and re-ranking service.
+"""
+
+from __future__ import annotations
+
+import re
+import uuid
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from math import pow
+from time import perf_counter
+from typing import Any
+
+from backend.core.logger import get_logger
+from backend.models.abc import (
+    BehaviorEvent,
+    BehaviorEventCreate,
+    BehaviorEventType,
+    CategoryStrategyStats,
+    OutcomeCreate,
+    OutcomeEvent,
+    OutcomeType,
+    RankedJob,
+    RecommendationEvent,
+    UserStrategyProfile,
+)
+from backend.models.errors import ErrorDetail
+from backend.models.job import Job
+from backend.services.exceptions import BadRequestError
+from backend.storage.records import (
+    BehaviorEventRecord,
+    OutcomeRecord,
+    RecommendationEventRecord,
+    utc_now,
+)
+from backend.storage.repository import HuntRepository
+
+
+_CATEGORIES = ("backend", "frontend", "data", "devops", "mobile", "general")
+_NEUTRAL_WEIGHT = 0.5
+_DECAY_HALF_LIFE_DAYS = 30.0
+logger = get_logger(__name__)
+
+
+@dataclass(slots=True)
+class ABCAdaptiveService:
+    """Closed-loop A -> B -> C -> strategy update -> re-ranking engine."""
+
+    repository: HuntRepository
+
+    async def rank_jobs(
+        self,
+        *,
+        user_id: str,
+        hunt_id: str,
+        session_id: str,
+        goal: str,
+        jobs: list[Job],
+        filters: dict[str, Any] | None = None,
+    ) -> list[RankedJob]:
+        if not jobs:
+            return []
+
+        filters = filters or {}
+        started_at = perf_counter()
+        profile = await self.get_strategy_profile(user_id)
+        category_weights = self._normalised_weights(profile.category_weights)
+
+        scored: list[RankedJob] = []
+        for job in jobs:
+            category = self.classify_job(job)
+            category_profile = profile.category_profiles.get(category)
+            base_score = self.base_match_score(job, goal)
+            behavior_score = self._behavior_score(category_profile)
+            outcome_score = self._outcome_score(category_profile)
+            category_weight = self._category_weight(category_profile, category_weights[category])
+            final_score = round(
+                base_score * 0.40
+                + behavior_score * 0.20
+                + outcome_score * 0.25
+                + category_weight * 0.15,
+                4,
+            )
+            scored.append(
+                RankedJob(
+                    job=job,
+                    event_id=str(uuid.uuid4()),
+                    job_id=job.job_id,
+                    rank=0,
+                    job_category=category,
+                    base_match_score=base_score,
+                    behavior_score=behavior_score,
+                    outcome_score=outcome_score,
+                    category_weight=category_weight,
+                    final_score=final_score,
+                    reason=self._reason(category, base_score, category_profile),
+                    strategy_weights=category_weights,
+                    filters=filters,
+                )
+            )
+
+        scored.sort(
+            key=lambda item: (
+                item.final_score,
+                item.base_match_score,
+                item.job.company.lower(),
+            ),
+            reverse=True,
+        )
+
+        events: list[RecommendationEvent] = []
+        ranked: list[RankedJob] = []
+        now = utc_now()
+        for index, ranked_job in enumerate(scored, start=1):
+            job = ranked_job.job.model_copy(
+                update={
+                    "ranking_position": index,
+                    "base_match_score": ranked_job.base_match_score,
+                    "final_score": ranked_job.final_score,
+                    "recommendation_reason": ranked_job.reason,
+                    "recommendation_event_id": ranked_job.event_id,
+                    "job_category": ranked_job.job_category,
+                }
+            )
+            updated = ranked_job.model_copy(update={"rank": index, "job": job})
+            ranked.append(updated)
+            events.append(
+                RecommendationEvent(
+                    event_id=updated.event_id,
+                    user_id=user_id,
+                    hunt_id=hunt_id,
+                    job_id=updated.job_id,
+                    ranking_position=index,
+                    base_match_score=updated.base_match_score,
+                    final_score=updated.final_score,
+                    recommendation_reason=updated.reason,
+                    strategy_weights_used=updated.strategy_weights,
+                    filters_applied=updated.filters,
+                    session_id=session_id,
+                    job_category=updated.job_category,
+                    timestamp=now,
+                )
+            )
+
+        await self.repository.save_recommendation_events(events)
+        logger.info(
+            "abc_recommendations_ranked",
+            extra={
+                "event": "abc_recommendations_ranked",
+                "user_id": user_id,
+                "hunt_id": hunt_id,
+                "session_id": session_id,
+                "jobs_ranked": len(ranked),
+                "top_job_id": ranked[0].job_id if ranked else None,
+                "top_category": ranked[0].job_category if ranked else None,
+                "top_score": ranked[0].final_score if ranked else None,
+                "latency_ms": int((perf_counter() - started_at) * 1000),
+            },
+        )
+        return ranked
+
+    async def log_behavior(self, payload: BehaviorEventCreate) -> BehaviorEvent:
+        antecedent = await self.repository.get_recommendation_event_record(
+            payload.antecedent_event_id
+        )
+        self._validate_behavior_context(payload, antecedent)
+
+        event = BehaviorEvent(
+            event_id=str(uuid.uuid4()),
+            antecedent_event_id=antecedent.id,
+            user_id=payload.user_id or antecedent.user_id,
+            hunt_id=payload.hunt_id or antecedent.hunt_id,
+            session_id=payload.session_id or antecedent.session_id,
+            event_type=payload.event_type,
+            job_id=payload.job_id or antecedent.job_id,
+            resume_id=payload.resume_id,
+            job_category=payload.job_category or antecedent.category,
+            timestamp=utc_now(),
+        )
+        await self.repository.save_behavior_event(event)
+        await self.refresh_strategy_profile(event.user_id)
+        logger.info(
+            "abc_behavior_logged",
+            extra={
+                "event": "abc_behavior_logged",
+                "user_id": event.user_id,
+                "hunt_id": event.hunt_id,
+                "session_id": event.session_id,
+                "behavior_event_id": event.event_id,
+                "antecedent_event_id": event.antecedent_event_id,
+                "event_type": event.event_type.value,
+                "job_id": event.job_id,
+                "category": event.job_category,
+            },
+        )
+        return event
+
+    async def log_outcome(self, payload: OutcomeCreate) -> OutcomeEvent:
+        behavior = await self.repository.get_behavior_event_record(payload.behavior_event_id)
+        event = OutcomeEvent(
+            outcome_id=str(uuid.uuid4()),
+            behavior_event_id=behavior.id,
+            outcome_type=payload.outcome_type,
+            response_time_days=payload.response_time_days,
+            timestamp=utc_now(),
+        )
+        await self.repository.save_outcome_event(event)
+        await self.refresh_strategy_profile(behavior.user_id)
+        logger.info(
+            "abc_outcome_logged",
+            extra={
+                "event": "abc_outcome_logged",
+                "user_id": behavior.user_id,
+                "hunt_id": behavior.hunt_id,
+                "session_id": behavior.session_id,
+                "outcome_id": event.outcome_id,
+                "behavior_event_id": event.behavior_event_id,
+                "outcome_type": event.outcome_type.value,
+                "response_time_days": event.response_time_days,
+                "job_id": behavior.job_id,
+                "category": behavior.category,
+            },
+        )
+        return event
+
+    async def get_strategy_profile(self, user_id: str) -> UserStrategyProfile:
+        profile = await self.repository.get_user_strategy_profile(user_id)
+        if profile is not None:
+            return profile
+        return self._empty_profile(user_id)
+
+    async def refresh_strategy_profile(self, user_id: str) -> UserStrategyProfile:
+        old_profile = await self.get_strategy_profile(user_id)
+        recommendation_records, behavior_records, outcome_records = await self.repository.list_abc_records(
+            user_id
+        )
+        profile = self._compute_profile(
+            user_id=user_id,
+            old_profile=old_profile,
+            recommendation_records=recommendation_records,
+            behavior_records=behavior_records,
+            outcome_records=outcome_records,
+        )
+        await self.repository.upsert_user_strategy_profile(profile)
+        logger.info(
+            "abc_strategy_profile_refreshed",
+            extra={
+                "event": "abc_strategy_profile_refreshed",
+                "user_id": user_id,
+                "category_weights": profile.category_weights,
+                "updated_at": profile.updated_at.isoformat(),
+            },
+        )
+        return profile
+
+    def _compute_profile(
+        self,
+        *,
+        user_id: str,
+        old_profile: UserStrategyProfile,
+        recommendation_records: list[RecommendationEventRecord],
+        behavior_records: list[BehaviorEventRecord],
+        outcome_records: list[OutcomeRecord],
+    ) -> UserStrategyProfile:
+        now = utc_now()
+        shown_by_category: dict[str, float] = defaultdict(float)
+        clicks_by_category: dict[str, float] = defaultdict(float)
+        starts_by_category: dict[str, float] = defaultdict(float)
+        applications_by_category: dict[str, float] = defaultdict(float)
+        abandons_by_category: dict[str, float] = defaultdict(float)
+        resume_selected_by_category: dict[str, float] = defaultdict(float)
+        behaviors_by_category: dict[str, float] = defaultdict(float)
+        outcomes_by_category: dict[str, float] = defaultdict(float)
+        success_by_category: dict[str, float] = defaultdict(float)
+        interviews_by_category: dict[str, float] = defaultdict(float)
+        offers_by_category: dict[str, float] = defaultdict(float)
+        followups_by_category: dict[str, float] = defaultdict(float)
+        rejections_by_category: dict[str, float] = defaultdict(float)
+        no_response_by_category: dict[str, float] = defaultdict(float)
+        response_time_by_category: dict[str, float] = defaultdict(float)
+        response_weight_by_category: dict[str, float] = defaultdict(float)
+
+        behavior_by_id = {record.id: record for record in behavior_records}
+
+        for record in recommendation_records:
+            shown_by_category[record.category] += self._decay(record.created_at, now)
+
+        for record in behavior_records:
+            weight = self._decay(record.created_at, now)
+            category = record.category
+            behaviors_by_category[category] += weight
+            if record.event_type in {
+                BehaviorEventType.JOB_VIEWED.value,
+                BehaviorEventType.JOB_CLICKED.value,
+            }:
+                clicks_by_category[category] += weight
+            if record.event_type == BehaviorEventType.APPLICATION_STARTED.value:
+                starts_by_category[category] += weight
+            if record.event_type == BehaviorEventType.APPLICATION_COMPLETED.value:
+                applications_by_category[category] += weight
+            if record.event_type == BehaviorEventType.APPLICATION_ABANDONED.value:
+                abandons_by_category[category] += weight
+            if record.event_type == BehaviorEventType.RESUME_SELECTED.value and record.resume_id:
+                resume_selected_by_category[category] += weight
+
+        for record in outcome_records:
+            behavior = behavior_by_id.get(record.behavior_event_id)
+            if behavior is None:
+                continue
+            weight = self._decay(record.created_at, now)
+            category = behavior.category
+            outcomes_by_category[category] += weight
+            if record.outcome_type == OutcomeType.INTERVIEW.value:
+                interviews_by_category[category] += weight
+                success_by_category[category] += weight
+                response_time_by_category[category] += max(record.response_time_days, 0.1) * weight
+                response_weight_by_category[category] += weight
+            elif record.outcome_type == OutcomeType.OFFER.value:
+                offers_by_category[category] += weight
+                success_by_category[category] += weight
+                response_time_by_category[category] += max(record.response_time_days, 0.1) * weight
+                response_weight_by_category[category] += weight
+            elif record.outcome_type == OutcomeType.FOLLOW_UP_REQUESTED.value:
+                followups_by_category[category] += weight
+                success_by_category[category] += weight * 0.6
+                response_time_by_category[category] += max(record.response_time_days, 0.1) * weight
+                response_weight_by_category[category] += weight
+            elif record.outcome_type == OutcomeType.REJECTION.value:
+                rejections_by_category[category] += weight
+            elif record.outcome_type == OutcomeType.NO_RESPONSE.value:
+                no_response_by_category[category] += weight
+
+        category_profiles: dict[str, CategoryStrategyStats] = {}
+        weights: dict[str, float] = {}
+        success_rates: dict[str, float] = {}
+        click_rates: dict[str, float] = {}
+        application_rates: dict[str, float] = {}
+        avg_response_times: dict[str, float] = {}
+
+        for category in _CATEGORIES:
+            shown = shown_by_category[category]
+            clicks = clicks_by_category[category]
+            starts = starts_by_category[category]
+            applications = applications_by_category[category]
+            abandons = abandons_by_category[category]
+            outcomes = outcomes_by_category[category]
+            successes = success_by_category[category]
+            no_responses = no_response_by_category[category]
+            avg_response = (
+                response_time_by_category[category] / response_weight_by_category[category]
+                if response_weight_by_category[category]
+                else 7.0
+            )
+            click_rate = self._smoothed_rate(clicks, max(shown, clicks), prior=0.35)
+            application_rate = self._smoothed_rate(
+                applications,
+                max(shown, applications),
+                prior=0.25,
+            )
+            abandonment_rate = self._smoothed_rate(abandons, max(starts, applications), prior=0.15)
+            success_rate = self._smoothed_rate(successes, max(applications, outcomes), prior=0.25)
+            response_speed = min(1.0, 1 / max(avg_response, 1.0))
+            resume_effectiveness = self._smoothed_rate(
+                successes,
+                max(resume_selected_by_category[category], applications),
+                prior=0.25,
+            )
+            score = round(
+                success_rate * 0.40
+                + click_rate * 0.20
+                + application_rate * 0.15
+                + response_speed * 0.15
+                + resume_effectiveness * 0.10,
+                4,
+            )
+            previous_weight = old_profile.category_weights.get(category, _NEUTRAL_WEIGHT)
+            raw_weight = previous_weight * 0.7 + score * 0.3
+            confidence = min(1.0, (shown + behaviors_by_category[category] * 0.05 + outcomes) / 8.0)
+            weight = round(_NEUTRAL_WEIGHT * (1 - confidence) + raw_weight * confidence, 4)
+
+            stats = CategoryStrategyStats(
+                applications_count=round(applications),
+                interviews_count=round(interviews_by_category[category]),
+                rejection_count=round(rejections_by_category[category]),
+                no_response_count=round(no_responses),
+                offers_count=round(offers_by_category[category]),
+                follow_up_count=round(followups_by_category[category]),
+                success_rate=round(success_rate, 4),
+                avg_response_time=round(avg_response, 4),
+                click_rate=round(click_rate, 4),
+                application_rate=round(application_rate, 4),
+                abandonment_rate=round(abandonment_rate, 4),
+                resume_performance_score=round(resume_effectiveness, 4),
+                score=score,
+                weight=weight,
+                confidence=round(confidence, 4),
+            )
+            category_profiles[category] = stats
+            weights[category] = weight
+            success_rates[category] = stats.success_rate
+            click_rates[category] = stats.click_rate
+            application_rates[category] = stats.application_rate
+            avg_response_times[category] = stats.avg_response_time
+
+        return UserStrategyProfile(
+            user_id=user_id,
+            category_weights=weights,
+            category_success_rates=success_rates,
+            click_rates=click_rates,
+            application_rates=application_rates,
+            avg_response_times=avg_response_times,
+            category_profiles=category_profiles,
+            updated_at=now,
+        )
+
+    @staticmethod
+    def classify_job(job: Job) -> str:
+        text = " ".join(
+            [
+                job.title,
+                job.description,
+                " ".join(job.requirements),
+            ]
+        ).lower()
+        category_keywords = {
+            "backend": {"backend", "api", "fastapi", "django", "flask", "database", "postgres", "redis"},
+            "frontend": {"frontend", "react", "javascript", "typescript", "ui", "css", "web"},
+            "data": {"data", "ml", "machine", "analytics", "etl", "pipeline", "pandas"},
+            "devops": {"devops", "cloud", "docker", "kubernetes", "terraform", "sre", "infrastructure"},
+            "mobile": {"mobile", "android", "ios", "swift", "kotlin", "react native"},
+        }
+        scores = {
+            category: sum(1 for keyword in keywords if keyword in text)
+            for category, keywords in category_keywords.items()
+        }
+        best_category, best_score = max(scores.items(), key=lambda item: item[1])
+        return best_category if best_score > 0 else "general"
+
+    @staticmethod
+    def base_match_score(job: Job, goal: str) -> float:
+        goal_terms = ABCAdaptiveService._terms(goal)
+        job_terms = ABCAdaptiveService._terms(
+            " ".join([job.title, job.description, " ".join(job.requirements), job.location])
+        )
+        if not goal_terms:
+            return 0.5
+        overlap = len(goal_terms & job_terms)
+        title_bonus = 0.15 if goal.lower() in job.title.lower() else 0.0
+        skill_bonus = min(0.2, len(set(job.requirements) & goal_terms) * 0.05)
+        return round(min(1.0, overlap / len(goal_terms) + title_bonus + skill_bonus), 4)
+
+    @staticmethod
+    def _terms(value: str) -> set[str]:
+        stop_words = {"and", "the", "for", "with", "role", "job", "senior", "engineer"}
+        return {
+            token
+            for token in re.findall(r"[a-z0-9]+", value.lower())
+            if token not in stop_words and len(token) > 1
+        }
+
+    @staticmethod
+    def _validate_behavior_context(
+        payload: BehaviorEventCreate,
+        antecedent: RecommendationEventRecord,
+    ) -> None:
+        mismatches = {}
+        for field_name, expected in {
+            "user_id": antecedent.user_id,
+            "hunt_id": antecedent.hunt_id,
+            "session_id": antecedent.session_id,
+            "job_id": antecedent.job_id,
+            "job_category": antecedent.category,
+        }.items():
+            provided = getattr(payload, field_name)
+            if provided is not None and provided != expected:
+                mismatches[field_name] = {"provided": provided, "expected": expected}
+        if mismatches:
+            raise BadRequestError(
+                "Behavior event does not match its recommendation context",
+                errors=[
+                    ErrorDetail(
+                        code="behavior_context_mismatch",
+                        message="Behavior must reference the same user, job, hunt, and session as the antecedent",
+                        details={"mismatches": mismatches},
+                    )
+                ],
+            )
+
+    @staticmethod
+    def _normalised_weights(weights: dict[str, float]) -> dict[str, float]:
+        return {category: round(weights.get(category, _NEUTRAL_WEIGHT), 4) for category in _CATEGORIES}
+
+    @staticmethod
+    def _category_weight(
+        profile: CategoryStrategyStats | None,
+        learned_weight: float,
+    ) -> float:
+        if profile is None:
+            return _NEUTRAL_WEIGHT
+        return round(_NEUTRAL_WEIGHT * (1 - profile.confidence) + learned_weight * profile.confidence, 4)
+
+    @staticmethod
+    def _behavior_score(profile: CategoryStrategyStats | None) -> float:
+        if profile is None:
+            return _NEUTRAL_WEIGHT
+        return round(
+            profile.click_rate * 0.45
+            + profile.application_rate * 0.40
+            + (1 - profile.abandonment_rate) * 0.15,
+            4,
+        )
+
+    @staticmethod
+    def _outcome_score(profile: CategoryStrategyStats | None) -> float:
+        if profile is None:
+            return _NEUTRAL_WEIGHT
+        rejection_rate = ABCAdaptiveService._smoothed_rate(
+            profile.rejection_count + profile.no_response_count,
+            max(
+                profile.applications_count,
+                profile.rejection_count + profile.no_response_count,
+            ),
+            prior=0.2,
+        )
+        response_speed = min(1.0, 1 / max(profile.avg_response_time, 1.0))
+        return round(
+            profile.success_rate * 0.70
+            + response_speed * 0.10
+            + (1 - rejection_rate) * 0.20,
+            4,
+        )
+
+    @staticmethod
+    def _reason(
+        category: str,
+        base_score: float,
+        profile: CategoryStrategyStats | None,
+    ) -> str:
+        if profile is None or profile.confidence < 0.2:
+            return f"Cold start: ranked by {category} match strength"
+        if profile.success_rate >= 0.35:
+            return f"Strong {category} interview and offer history"
+        if profile.application_rate >= 0.45:
+            return f"High {category} application engagement"
+        if profile.rejection_count > profile.interviews_count + profile.offers_count:
+            return f"Lower confidence: {category} outcomes need improvement"
+        if base_score >= 0.75:
+            return f"Strong static match with learned {category} strategy"
+        return f"Balanced {category} recommendation using current strategy weights"
+
+    @staticmethod
+    def _smoothed_rate(
+        numerator: float,
+        denominator: float,
+        *,
+        prior: float,
+        strength: float = 4.0,
+    ) -> float:
+        return round(min(1.0, (numerator + prior * strength) / (denominator + strength)), 4)
+
+    @staticmethod
+    def _decay(timestamp: datetime, now: datetime) -> float:
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        age_days = max(0.0, (now - timestamp).total_seconds() / 86400)
+        return pow(0.5, age_days / _DECAY_HALF_LIFE_DAYS)
+
+    @staticmethod
+    def _empty_profile(user_id: str) -> UserStrategyProfile:
+        now = utc_now()
+        neutral_profiles = {
+            category: CategoryStrategyStats(weight=_NEUTRAL_WEIGHT)
+            for category in _CATEGORIES
+        }
+        neutral_weights = {category: _NEUTRAL_WEIGHT for category in _CATEGORIES}
+        neutral_rates = {category: 0.0 for category in _CATEGORIES}
+        return UserStrategyProfile(
+            user_id=user_id,
+            category_weights=neutral_weights,
+            category_success_rates=neutral_rates,
+            click_rates=neutral_rates,
+            application_rates=neutral_rates,
+            avg_response_times={category: 0.0 for category in _CATEGORIES},
+            category_profiles=neutral_profiles,
+            updated_at=now,
+        )
