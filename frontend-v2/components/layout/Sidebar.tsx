@@ -5,53 +5,58 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Command,
+  MessageSquare,
   Briefcase,
   FileText,
+  FlaskConical,
   BarChart3,
   Compass,
   User,
-  Lightbulb,
+  Settings,
   ChevronLeft,
   ChevronRight,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useHuntStore } from "@/lib/store";
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
-  phase: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Command Center", href: "/", icon: Command, phase: "1" },
-  { label: "Job Results", href: "/jobs", icon: Briefcase, phase: "2" },
-  { label: "Applications", href: "/applications", icon: FileText, phase: "2" },
-  { label: "Workspace", href: "/workspace", icon: Lightbulb, phase: "2" },
-  { label: "Analytics", href: "/analytics", icon: BarChart3, phase: "3" },
-  { label: "Strategy", href: "/strategy", icon: Compass, phase: "3" },
-  { label: "Profile", href: "/profile", icon: User, phase: "3" },
+  { label: "Command Center", href: "/", icon: Command },
+  { label: "Chat", href: "/chat", icon: MessageSquare },
+  { label: "Jobs", href: "/jobs", icon: Briefcase },
+  { label: "Applications", href: "/applications", icon: FileText },
+  { label: "Resume Lab", href: "/resume-lab", icon: FlaskConical },
+  { label: "Analytics", href: "/analytics", icon: BarChart3 },
+  { label: "Strategy", href: "/strategy", icon: Compass },
+  { label: "Profile", href: "/profile", icon: User },
+  { label: "Settings", href: "/settings", icon: Settings },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const collapsed = useHuntStore((s) => s.sidebarCollapsed);
-  const setCollapsed = useHuntStore((s) => s.setSidebarCollapsed);
-  const serverState = useHuntStore((s) => s.serverState);
 
   return (
     <motion.aside
       initial={false}
-      animate={{ width: collapsed ? 64 : 240 }}
-      transition={{ duration: 0.2, ease: "easeInOut" }}
-      className="fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-white/[0.06] bg-[#0B1020]"
+      animate={{ width: collapsed ? 68 : 248 }}
+      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+      className="fixed left-0 top-0 z-40 flex h-screen flex-col glass-panel-elevated border-r-0"
+      style={{ borderRight: "1px solid var(--glass-border)" }}
     >
       {/* Logo */}
-      <div className="flex h-14 items-center gap-3 border-b border-white/[0.06] px-4">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-          <Zap className="h-4 w-4 text-indigo-400" />
+      <div className="flex h-16 items-center gap-3 px-4" style={{ borderBottom: "1px solid var(--glass-border)" }}>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/20">
+          <Zap className="h-4.5 w-4.5 text-white" />
         </div>
         <AnimatePresence>
           {!collapsed && (
@@ -59,22 +64,47 @@ export function Sidebar() {
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -8 }}
-              transition={{ duration: 0.15 }}
+              transition={{ duration: 0.2 }}
               className="min-w-0"
             >
-              <p className="truncate text-sm font-semibold text-slate-100">
+              <p className="truncate text-sm font-bold text-foreground tracking-tight">
                 HuntAI
               </p>
-              <p className="truncate text-[10px] font-medium text-slate-500">
-                Career OS
+              <p className="truncate text-[10px] font-medium text-muted-foreground">
+                Career Operating System
               </p>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
+      {/* AI Status Orb */}
+      <div className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: "1px solid var(--glass-border)" }}>
+        <div className="relative">
+          <div className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-orb-breathe" />
+          <div className="absolute inset-0 h-2.5 w-2.5 rounded-full bg-emerald-400/30 animate-ping" />
+        </div>
+        <AnimatePresence>
+          {!collapsed && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col"
+            >
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+                AI System
+              </span>
+              <span className="text-[11px] font-medium text-emerald-400">
+                Active · Listening
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-3">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
@@ -83,20 +113,29 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
+                "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
                 isActive
-                  ? "bg-indigo-500/10 text-indigo-300"
-                  : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
               )}
             >
               {isActive && (
                 <motion.div
                   layoutId="sidebar-active"
-                  className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-indigo-400"
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    background: "var(--sidebar-accent)",
+                    borderLeft: "2px solid var(--primary)",
+                  }}
+                  transition={{ type: "spring", stiffness: 350, damping: 30 }}
                 />
               )}
-              <Icon className={cn("h-[18px] w-[18px] shrink-0", isActive ? "text-indigo-400" : "text-slate-500 group-hover:text-slate-300")} />
+              <Icon
+                className={cn(
+                  "h-[18px] w-[18px] shrink-0 relative z-10 transition-colors",
+                  isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                )}
+              />
               <AnimatePresence>
                 {!collapsed && (
                   <motion.span
@@ -104,7 +143,7 @@ export function Sidebar() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.15 }}
-                    className="truncate"
+                    className="truncate relative z-10"
                   >
                     {item.label}
                   </motion.span>
@@ -115,39 +154,59 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-white/[0.06] px-2 py-3">
-        {/* Server status */}
-        <div className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2",
-          !collapsed && "mb-2"
-        )}>
-          <div className={cn(
-            "h-2 w-2 shrink-0 rounded-full",
-            serverState.tone === "online" && "bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]",
-            serverState.tone === "offline" && "bg-red-400 shadow-[0_0_8px_rgba(239,68,68,0.4)]",
-            serverState.tone === "checking" && "bg-amber-400 animate-pulse"
-          )} />
+      {/* Learning Progress */}
+      {!collapsed && (
+        <div className="px-4 py-3" style={{ borderTop: "1px solid var(--glass-border)" }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+              AI Learning
+            </span>
+            <span className="text-[10px] font-bold text-primary">34%</span>
+          </div>
+          <div className="h-1 rounded-full overflow-hidden" style={{ background: "var(--glass-bg-elevated)" }}>
+            <motion.div
+              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+              initial={{ width: 0 }}
+              animate={{ width: "34%" }}
+              transition={{ duration: 1, ease: "easeOut", delay: 0.5 }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* User + Collapse */}
+      <div className="px-2 py-3" style={{ borderTop: "1px solid var(--glass-border)" }}>
+        {/* User Identity */}
+        <div className={cn("flex items-center gap-3 rounded-xl px-3 py-2 mb-1", !collapsed && "")}>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/20 to-indigo-500/20 text-xs font-bold text-primary">
+            S
+          </div>
           <AnimatePresence>
             {!collapsed && (
-              <motion.span
+              <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="truncate text-xs text-slate-500"
+                className="min-w-0"
               >
-                {serverState.tone === "online" ? "Backend Live" : serverState.tone === "offline" ? "Backend Offline" : "Connecting..."}
-              </motion.span>
+                <p className="truncate text-xs font-semibold text-foreground">Swaransh</p>
+                <p className="truncate text-[10px] text-muted-foreground">Explorer</p>
+              </motion.div>
             )}
           </AnimatePresence>
         </div>
 
         {/* Collapse toggle */}
         <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="flex w-full items-center justify-center rounded-lg py-2 text-slate-500 transition-colors hover:bg-white/[0.04] hover:text-slate-300"
+          onClick={onToggle}
+          className="flex w-full items-center justify-center rounded-xl py-2 text-muted-foreground transition-all hover:text-foreground"
+          style={{ background: "var(--glass-bg)" }}
         >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronLeft className="h-4 w-4" />
+          )}
         </button>
       </div>
     </motion.aside>

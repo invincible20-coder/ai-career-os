@@ -14,6 +14,9 @@ class UserProfile(BaseModel):
     education: str | None = None
     interests: list[str] = Field(default_factory=list)
     experience: str | None = None
+    preferred_locations: list[str] = Field(default_factory=list)
+    github_topics: list[str] = Field(default_factory=list)
+    learning_history: list[str] = Field(default_factory=list)
 
     def has_signal(self) -> bool:
         return bool(
@@ -21,6 +24,9 @@ class UserProfile(BaseModel):
             or self.interests
             or (self.education and self.education.strip())
             or (self.experience and self.experience.strip())
+            or self.preferred_locations
+            or self.github_topics
+            or self.learning_history
         )
 
     def to_prompt_block(self) -> str:
@@ -28,7 +34,10 @@ class UserProfile(BaseModel):
             f"Skills: {', '.join(self.skills) or 'Not provided'}\n"
             f"Education: {self.education or 'Not provided'}\n"
             f"Interests: {', '.join(self.interests) or 'Not provided'}\n"
-            f"Experience: {self.experience or 'Not provided'}"
+            f"Experience: {self.experience or 'Not provided'}\n"
+            f"Preferred locations: {', '.join(self.preferred_locations) or 'Not provided'}\n"
+            f"GitHub topics: {', '.join(self.github_topics) or 'Not provided'}\n"
+            f"Learning history: {', '.join(self.learning_history) or 'Not provided'}"
         )
 
 

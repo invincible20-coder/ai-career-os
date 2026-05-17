@@ -29,6 +29,7 @@ from backend.services.exceptions import (
 from backend.services.plan_validator import validate_execution_plan
 from backend.services.retry import backoff_seconds, is_transient_error
 from backend.services.abc_service import ABCAdaptiveService
+from backend.services.resume_correlation_service import ResumeCorrelationService
 from backend.services.strategy_service import StrategyService
 from backend.services.tracking_service import TrackingService
 from backend.storage.repository import HuntRepository
@@ -47,6 +48,7 @@ class HuntOrchestrator:
     strategy_service: StrategyService
     tracking_service: TrackingService
     abc_service: ABCAdaptiveService
+    resume_correlation_service: ResumeCorrelationService
 
     async def execute(
         self,
@@ -108,6 +110,7 @@ class HuntOrchestrator:
                     resolved_goal,
                     hunt_id,
                     strategy,
+                    profile,
                     user_key=user_key,
                     session_id=session_id,
                 ),
@@ -127,10 +130,17 @@ class HuntOrchestrator:
                     hunt_id,
                     result,
                     user_key=user_key,
+                    fingerprints_by_application_id=(
+                        self.resume_correlation_service.fingerprint_application_batch(
+                            user_id=user_key,
+                            applications=result,
+                        )
+                    ),
                     attempt=attempt,
                     latency_ms=latency_ms,
                 ),
             )
+            await self.resume_correlation_service.refresh_profile(user_key)
             await self.tracking_service.refresh_behavior_snapshot(user_key)
 
             await self._run_step(
@@ -376,6 +386,7 @@ class HuntOrchestrator:
         resolved_goal: str,
         hunt_id: str,
         strategy: StrategyAdjustment,
+        profile: UserProfile,
         *,
         user_key: str,
         session_id: str,
@@ -417,6 +428,7 @@ class HuntOrchestrator:
             session_id=session_id,
             goal=resolved_goal,
             jobs=selected_jobs,
+            profile=profile,
             filters={
                 "behavior_strategy": strategy.model_dump(mode="json"),
                 "role_similarity_required": strategy.role_similarity_required,

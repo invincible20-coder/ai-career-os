@@ -1,115 +1,184 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { TopBar } from "@/components/layout/TopBar";
-import { HeroInput } from "@/components/dashboard/HeroInput";
-import { QuickActions } from "@/components/dashboard/QuickActions";
-import { PlanVisualization } from "@/components/dashboard/PlanVisualization";
-import { ActivityStream } from "@/components/dashboard/ActivityStream";
-import { MetricsBar, BehaviorStrip } from "@/components/dashboard/MetricsBar";
-import { JobList } from "@/components/jobs/JobList";
-import { ContentViewer } from "@/components/content/ContentViewer";
-import { TrackerTable } from "@/components/tracking/TrackerTable";
-import { RecommendationPanel } from "@/components/career/RecommendationPanel";
-import { ErrorPanel } from "@/components/shared/ErrorPanel";
-import { useHuntStore } from "@/lib/store";
+import { Sparkles, Zap } from "lucide-react";
+import { AppShell } from "@/components/layout/AppShell";
+import { CommandInput } from "@/components/command/CommandInput";
+import { SuggestionChips } from "@/components/command/SuggestionChips";
+import { SignalMeter } from "@/components/command/SignalMeter";
+import { AgentActivity } from "@/components/ai/AgentActivity";
+import { PersonaDetector } from "@/components/ai/PersonaDetector";
+import { LearningTimeline } from "@/components/ai/LearningTimeline";
+import { GlassCard } from "@/components/glass/GlassCard";
 
 export default function CommandCenterPage() {
-  const checkHealth = useHuntStore((s) => s.checkHealth);
-  const fetchAnalytics = useHuntStore((s) => s.fetchAnalytics);
-  const huntId = useHuntStore((s) => s.huntId);
-  const isPolling = useHuntStore((s) => s.isPolling);
-  const refreshHunt = useHuntStore((s) => s.refreshHunt);
-  const sidebarCollapsed = useHuntStore((s) => s.sidebarCollapsed);
+  const [goal, setGoal] = useState("");
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  // Initial checks
-  useEffect(() => {
-    checkHealth();
-    fetchAnalytics();
-  }, [checkHealth, fetchAnalytics]);
+  const handleSubmit = useCallback(() => {
+    if (!goal.trim()) return;
+    setHasSubmitted(true);
+  }, [goal]);
 
-  // Polling
-  useEffect(() => {
-    if (!huntId || !isPolling) return;
-    const id = window.setInterval(() => refreshHunt(), 1800);
-    return () => window.clearInterval(id);
-  }, [huntId, isPolling, refreshHunt]);
+  const handleChipSelect = useCallback((label: string) => {
+    setGoal((prev) =>
+      prev ? `${prev}\n\nI'm interested in: ${label}` : `I'm interested in: ${label}`
+    );
+  }, []);
+
+  const greeting = getGreeting();
 
   return (
-    <div className="flex min-h-screen bg-[#0B1020]">
-      <Sidebar />
-
-      {/* Main content area */}
-      <motion.main
-        initial={false}
-        animate={{ marginLeft: sidebarCollapsed ? 64 : 240 }}
-        transition={{ duration: 0.2, ease: "easeInOut" }}
-        className="flex-1 min-w-0"
-      >
-        <TopBar title="Command Center" />
-
-        <div className="p-6 space-y-4 max-w-[1600px] mx-auto">
-          {/* Row 1: Hero Input + Quick Actions */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <HeroInput />
-            <div className="mt-3">
-              <QuickActions />
+    <AppShell
+      title="Command Center"
+      contextContent={<CommandCenterContext />}
+    >
+      <div className="space-y-6">
+        {/* Greeting */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <div className="flex items-center gap-3 mb-1">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20">
+              <Sparkles className="h-4 w-4 text-primary" />
             </div>
-          </motion.div>
+            <div>
+              <h2 className="text-xl font-bold text-foreground tracking-tight">
+                {greeting}, Swaransh
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Your AI career strategist is ready. What&apos;s on your mind?
+              </p>
+            </div>
+          </div>
+        </motion.div>
 
-          {/* Row 2: Metrics */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.05 }}
-          >
-            <MetricsBar />
-          </motion.div>
+        {/* Command Input */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+        >
+          <CommandInput
+            value={goal}
+            onChange={setGoal}
+            onSubmit={handleSubmit}
+          />
+        </motion.div>
 
-          {/* Row 3: Plan + Activity + Recommendations */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-            className="grid grid-cols-1 lg:grid-cols-3 gap-4"
-          >
-            <PlanVisualization />
-            <ActivityStream />
-            <RecommendationPanel />
-          </motion.div>
+        {/* Suggestion Chips */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+        >
+          <SuggestionChips onSelect={handleChipSelect} />
+        </motion.div>
 
-          {/* Row 4: Jobs + Content Viewer */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.15 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-4"
-          >
-            <JobList />
-            <ContentViewer />
-          </motion.div>
+        {/* Signal Meter */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+        >
+          <SignalMeter />
+        </motion.div>
 
-          {/* Row 5: Behavior + Tracker */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
-            className="space-y-4"
-          >
-            <BehaviorStrip />
-            <TrackerTable />
-          </motion.div>
-        </div>
-      </motion.main>
+        {/* Quick Intelligence Cards */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        >
+          <QuickCard
+            icon={<Zap className="h-4 w-4 text-amber-400" />}
+            title="Quick Hunt"
+            description="Launch an autonomous job search with AI agents"
+            action="Start Hunt"
+            gradient="from-amber-500/10 to-orange-500/5"
+          />
+          <QuickCard
+            icon={<Sparkles className="h-4 w-4 text-violet-400" />}
+            title="Career Analysis"
+            description="Get AI-powered career path recommendations"
+            action="Analyze"
+            gradient="from-violet-500/10 to-purple-500/5"
+          />
+          <QuickCard
+            icon={<Zap className="h-4 w-4 text-emerald-400" />}
+            title="Resume Lab"
+            description="Optimize your resume with AI intelligence"
+            action="Open Lab"
+            gradient="from-emerald-500/10 to-teal-500/5"
+          />
+        </motion.div>
 
-      {/* Error overlay */}
-      <ErrorPanel />
+        {/* Agent Activity */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+        >
+          <AgentActivity />
+        </motion.div>
+      </div>
+    </AppShell>
+  );
+}
+
+function CommandCenterContext() {
+  return (
+    <div className="space-y-4">
+      <PersonaDetector />
+      <LearningTimeline />
     </div>
   );
+}
+
+function QuickCard({
+  icon,
+  title,
+  description,
+  action,
+  gradient,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  action: string;
+  gradient: string;
+}) {
+  return (
+    <GlassCard className={`p-4 bg-gradient-to-br ${gradient}`}>
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+          style={{ background: "var(--glass-bg-elevated)" }}
+        >
+          {icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+            {description}
+          </p>
+          <button className="mt-3 text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
+            {action}
+            <span className="text-[10px]">→</span>
+          </button>
+        </div>
+      </div>
+    </GlassCard>
+  );
+}
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
 }

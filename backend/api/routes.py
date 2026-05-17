@@ -7,6 +7,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Request
 
 from backend.models.abc import BehaviorEventCreate, OutcomeCreate, RankJobsRequest
+from backend.models.career import UserProfile
+from backend.models.intelligence import ConversationIntentRequest
+from backend.models.resume_intelligence import ResumeAnalysisRequest
 from backend.api.dependencies import get_hunt_service
 from backend.api.schemas import (
     CareerRecommendationRequest,
@@ -16,7 +19,12 @@ from backend.api.schemas import (
 )
 from backend.services.hunt_service import HuntService
 
+from backend.api.auth import router as auth_router
+from backend.api.resume import router as resume_router
+
 router = APIRouter()
+router.include_router(auth_router)
+router.include_router(resume_router)
 
 
 @router.get("/health", response_model=ResponseEnvelope, tags=["system"])
@@ -190,6 +198,118 @@ async def get_abc_strategy_profile(
     service: HuntService = Depends(get_hunt_service),
 ) -> ResponseEnvelope:
     profile = await service.get_abc_strategy_profile(_user_key(request, user_id))
+    return ResponseEnvelope(success=True, data=profile.model_dump(mode="json"), errors=[])
+
+
+@router.post("/intelligence/intent", response_model=ResponseEnvelope, tags=["intelligence"])
+async def record_conversational_intent(
+    request: Request,
+    payload: ConversationIntentRequest,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    state = await service.record_conversation(
+        user_id=_user_key(request, user_id),
+        payload=payload,
+    )
+    return ResponseEnvelope(success=True, data=state.intent.model_dump(mode="json"), errors=[])
+
+
+@router.post(
+    "/intelligence/career-discovery",
+    response_model=ResponseEnvelope,
+    tags=["intelligence"],
+)
+async def get_career_discovery(
+    request: Request,
+    payload: UserProfile,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    discovery = await service.get_career_discovery(
+        _user_key(request, user_id),
+        profile=payload,
+    )
+    return ResponseEnvelope(success=True, data=discovery.model_dump(mode="json"), errors=[])
+
+
+@router.post("/intelligence/confidence", response_model=ResponseEnvelope, tags=["intelligence"])
+async def get_confidence(
+    request: Request,
+    payload: UserProfile,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    confidence = await service.get_confidence(
+        _user_key(request, user_id),
+        profile=payload,
+    )
+    return ResponseEnvelope(success=True, data=confidence.model_dump(mode="json"), errors=[])
+
+
+@router.get("/intelligence/profile", response_model=ResponseEnvelope, tags=["intelligence"])
+async def get_intelligence_profile(
+    request: Request,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    state = await service.get_intelligence_profile(_user_key(request, user_id))
+    return ResponseEnvelope(success=True, data=state.model_dump(mode="json"), errors=[])
+
+
+@router.post("/resume-intelligence/analyze", response_model=ResponseEnvelope, tags=["resume"])
+async def analyze_resume(
+    request: Request,
+    payload: ResumeAnalysisRequest,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    fingerprint = await service.analyze_resume(
+        user_id=_user_key(request, user_id),
+        payload=payload,
+    )
+    return ResponseEnvelope(success=True, data=fingerprint.model_dump(mode="json"), errors=[])
+
+
+@router.get("/resume-intelligence/correlations", response_model=ResponseEnvelope, tags=["resume"])
+async def get_resume_correlations(
+    request: Request,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    profile = await service.get_resume_correlation_profile(_user_key(request, user_id))
+    return ResponseEnvelope(success=True, data=profile.model_dump(mode="json"), errors=[])
+
+
+@router.get(
+    "/resume-intelligence/effectiveness/{resume_id}",
+    response_model=ResponseEnvelope,
+    tags=["resume"],
+)
+async def get_resume_effectiveness(
+    request: Request,
+    resume_id: str,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    effectiveness = await service.get_resume_effectiveness(
+        user_id=_user_key(request, user_id),
+        resume_id=resume_id,
+    )
+    return ResponseEnvelope(
+        success=True,
+        data=effectiveness.model_dump(mode="json") if effectiveness else None,
+        errors=[],
+    )
+
+
+@router.get("/predictive-career/profile", response_model=ResponseEnvelope, tags=["career"])
+async def get_predictive_career_profile(
+    request: Request,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    profile = await service.get_predictive_career_profile(_user_key(request, user_id))
     return ResponseEnvelope(success=True, data=profile.model_dump(mode="json"), errors=[])
 
 

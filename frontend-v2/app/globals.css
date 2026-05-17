@@ -4,6 +4,8 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ─── Theme Tokens ───────────────────────────────────────────────────────── */
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
@@ -58,53 +60,136 @@
   --color-error: var(--error);
 }
 
-/* Dark-first design - this IS the default */
+/* ─── Dark Mode (Default) ────────────────────────────────────────────────── */
+
 :root {
-  --background: #0B1020;
+  --background: #07090F;
   --foreground: #F1F5F9;
-  --card: #111827;
+  --card: rgba(17, 24, 39, 0.6);
   --card-foreground: #F1F5F9;
-  --popover: #111827;
+  --popover: rgba(17, 24, 39, 0.9);
   --popover-foreground: #F1F5F9;
-  --primary: #6366F1;
+  --primary: #818CF8;
   --primary-foreground: #FFFFFF;
-  --secondary: #1E293B;
+  --secondary: rgba(30, 41, 59, 0.5);
   --secondary-foreground: #E2E8F0;
-  --muted: #1E293B;
+  --muted: rgba(30, 41, 59, 0.4);
   --muted-foreground: #64748B;
-  --accent: #1E293B;
+  --accent: rgba(30, 41, 59, 0.5);
   --accent-foreground: #E2E8F0;
   --destructive: #EF4444;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.08);
-  --ring: #6366F1;
-  --radius: 0.5rem;
+  --border: rgba(255, 255, 255, 0.07);
+  --input: rgba(255, 255, 255, 0.07);
+  --ring: #818CF8;
+  --radius: 0.625rem;
 
   /* Custom tokens */
-  --surface: #0F172A;
-  --surface-elevated: #1E293B;
+  --surface: rgba(15, 23, 42, 0.5);
+  --surface-elevated: rgba(30, 41, 59, 0.4);
+  --indigo: #818CF8;
+  --violet: #A78BFA;
+  --cyan-accent: #22D3EE;
+  --success: #34D399;
+  --warning: #FBBF24;
+  --error: #F87171;
+
+  --chart-1: #818CF8;
+  --chart-2: #A78BFA;
+  --chart-3: #22D3EE;
+  --chart-4: #34D399;
+  --chart-5: #FBBF24;
+
+  --sidebar: rgba(7, 9, 15, 0.8);
+  --sidebar-foreground: #94A3B8;
+  --sidebar-primary: #818CF8;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: rgba(129, 140, 248, 0.08);
+  --sidebar-accent-foreground: #E2E8F0;
+  --sidebar-border: rgba(255, 255, 255, 0.05);
+  --sidebar-ring: #818CF8;
+
+  /* Glass system */
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.05);
+  --glass-bg-hover: rgba(255, 255, 255, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.14);
+  --glass-border-active: rgba(129, 140, 248, 0.3);
+  --glass-blur: 20px;
+  --glass-blur-heavy: 40px;
+  --glass-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --glass-shadow-hover: 0 8px 40px -8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --glass-shadow-glow: 0 0 30px -5px rgba(129, 140, 248, 0.15);
+  --glass-inner-glow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+
+  /* Depth layers */
+  --depth-base: 0;
+  --depth-raised: 1;
+  --depth-overlay: 2;
+  --depth-modal: 3;
+}
+
+/* ─── Light Mode ─────────────────────────────────────────────────────────── */
+
+:root.light {
+  --background: #F8FAFC;
+  --foreground: #0F172A;
+  --card: rgba(255, 255, 255, 0.7);
+  --card-foreground: #0F172A;
+  --popover: rgba(255, 255, 255, 0.9);
+  --popover-foreground: #0F172A;
+  --primary: #6366F1;
+  --primary-foreground: #FFFFFF;
+  --secondary: rgba(241, 245, 249, 0.8);
+  --secondary-foreground: #334155;
+  --muted: rgba(241, 245, 249, 0.6);
+  --muted-foreground: #64748B;
+  --accent: rgba(241, 245, 249, 0.8);
+  --accent-foreground: #334155;
+  --destructive: #DC2626;
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.06);
+  --ring: #6366F1;
+
+  --surface: rgba(248, 250, 252, 0.6);
+  --surface-elevated: rgba(255, 255, 255, 0.8);
   --indigo: #6366F1;
   --violet: #8B5CF6;
-  --cyan-accent: #22D3EE;
-  --success: #10B981;
-  --warning: #F59E0B;
-  --error: #EF4444;
+  --cyan-accent: #0891B2;
+  --success: #059669;
+  --warning: #D97706;
+  --error: #DC2626;
 
   --chart-1: #6366F1;
   --chart-2: #8B5CF6;
-  --chart-3: #22D3EE;
-  --chart-4: #10B981;
-  --chart-5: #F59E0B;
+  --chart-3: #0891B2;
+  --chart-4: #059669;
+  --chart-5: #D97706;
 
-  --sidebar: #0B1020;
-  --sidebar-foreground: #94A3B8;
+  --sidebar: rgba(255, 255, 255, 0.7);
+  --sidebar-foreground: #475569;
   --sidebar-primary: #6366F1;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: rgba(99, 102, 241, 0.1);
-  --sidebar-accent-foreground: #E2E8F0;
-  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-accent: rgba(99, 102, 241, 0.06);
+  --sidebar-accent-foreground: #1E293B;
+  --sidebar-border: rgba(0, 0, 0, 0.06);
   --sidebar-ring: #6366F1;
+
+  --glass-bg: rgba(255, 255, 255, 0.5);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.7);
+  --glass-bg-hover: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-border-hover: rgba(0, 0, 0, 0.12);
+  --glass-border-active: rgba(99, 102, 241, 0.3);
+  --glass-blur: 20px;
+  --glass-blur-heavy: 40px;
+  --glass-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --glass-shadow-hover: 0 8px 40px -8px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --glass-shadow-glow: 0 0 30px -5px rgba(99, 102, 241, 0.1);
+  --glass-inner-glow: inset 0 1px 0 0 rgba(255, 255, 255, 0.8);
 }
+
+/* ─── Base Layer ─────────────────────────────────────────────────────────── */
 
 @layer base {
   * {
@@ -112,34 +197,127 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    transition: background-color 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   }
   html {
     @apply font-sans scroll-smooth;
+    transition: color-scheme 0.6s;
   }
 }
 
-/* Scrollbar styling */
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+
 @layer base {
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
+    background: var(--glass-border);
+    border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--glass-border-hover);
   }
 }
 
-/* Pulse animation for running states */
+/* ─── Glass System ───────────────────────────────────────────────────────── */
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), var(--glass-inner-glow);
+  transition: background 0.3s ease,
+              border-color 0.3s ease,
+              box-shadow 0.3s ease,
+              transform 0.2s ease;
+}
+
+.glass-panel:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+  box-shadow: var(--glass-shadow-hover), var(--glass-inner-glow);
+}
+
+.glass-panel-elevated {
+  background: var(--glass-bg-elevated);
+  backdrop-filter: blur(var(--glass-blur-heavy));
+  -webkit-backdrop-filter: blur(var(--glass-blur-heavy));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-hover), var(--glass-inner-glow);
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius-xl);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+  box-shadow: var(--glass-shadow-hover);
+  transform: translateY(-1px);
+}
+
+.glass-card-active {
+  border-color: var(--glass-border-active);
+  box-shadow: var(--glass-shadow-hover), var(--glass-shadow-glow);
+}
+
+.glass-input {
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-inner-glow);
+  transition: all 0.2s ease;
+}
+
+.glass-input:focus,
+.glass-input:focus-within {
+  border-color: var(--glass-border-active);
+  box-shadow: var(--glass-inner-glow), var(--glass-shadow-glow);
+  background: var(--glass-bg-elevated);
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
-  50% { box-shadow: 0 0 16px 2px rgba(99, 102, 241, 0.3); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(129, 140, 248, 0); }
+  50% { box-shadow: 0 0 20px 3px rgba(129, 140, 248, 0.2); }
+}
+
+@keyframes orb-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+@keyframes orb-active {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 8px 2px rgba(129, 140, 248, 0.3);
+  }
+  50% {
+    transform: scale(1.2);
+    box-shadow: 0 0 20px 6px rgba(129, 140, 248, 0.5);
+  }
 }
 
 @keyframes shimmer {
@@ -147,12 +325,130 @@
   100% { background-position: 200% 0; }
 }
 
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes confidence-fill {
+  from { stroke-dashoffset: var(--circumference); }
+  to { stroke-dashoffset: var(--target-offset); }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(16px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-in-up {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes text-reveal {
+  from { max-height: 0; opacity: 0; }
+  to { max-height: 500px; opacity: 1; }
+}
+
+/* Utility classes */
 .animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+.animate-orb-breathe {
+  animation: orb-breathe 3s ease-in-out infinite;
+}
+
+.animate-orb-active {
+  animation: orb-active 1.5s ease-in-out infinite;
 }
 
 .animate-shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.03) 50%, transparent 100%);
   background-size: 200% 100%;
-  animation: shimmer 2s ease-in-out infinite;
+  animation: shimmer 2.5s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
+
+.animate-slide-in-up {
+  animation: slide-in-up 0.3s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradient-shift 6s ease infinite;
+}
+
+/* Typing dots */
+.typing-dot:nth-child(1) { animation: typing-dot 1.4s ease-in-out infinite; }
+.typing-dot:nth-child(2) { animation: typing-dot 1.4s ease-in-out 0.2s infinite; }
+.typing-dot:nth-child(3) { animation: typing-dot 1.4s ease-in-out 0.4s infinite; }
+
+/* ─── Gradient Mesh Background ───────────────────────────────────────────── */
+
+.gradient-mesh {
+  position: relative;
+  overflow: hidden;
+}
+
+.gradient-mesh::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: 
+    radial-gradient(ellipse at 20% 50%, rgba(129, 140, 248, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(167, 139, 250, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 40% 80%, rgba(34, 211, 238, 0.03) 0%, transparent 50%);
+  animation: gradient-shift 12s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── Confidence Ring ────────────────────────────────────────────────────── */
+
+.confidence-ring {
+  transform: rotate(-90deg);
+}
+
+.confidence-ring circle {
+  transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Transition groups ──────────────────────────────────────────────────── */
+
+.theme-transition * {
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.3s ease,
+              color 0.3s ease,
+              box-shadow 0.3s ease !important;
 }

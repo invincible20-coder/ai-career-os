@@ -13,7 +13,13 @@ from backend.orchestrator import HuntOrchestrator
 from backend.services.analytics_service import AnalyticsService
 from backend.services.behavior_service import BehaviorService
 from backend.services.abc_service import ABCAdaptiveService
+from backend.services.career_discovery_service import CareerDiscoveryService
+from backend.services.confidence_service import ConfidenceService
 from backend.services.hunt_service import HuntService
+from backend.services.intelligence_service import IntelligenceService
+from backend.services.intent_service import ConversationalIntentService
+from backend.services.predictive_career_service import PredictiveCareerService
+from backend.services.resume_correlation_service import ResumeCorrelationService
 from backend.services.strategy_service import StrategyService
 from backend.services.tracking_service import TrackingService
 from backend.storage.repository import HuntRepository
@@ -42,7 +48,27 @@ async def get_hunt_service(
     behavior_service = BehaviorService(analytics_service)
     strategy_service = StrategyService(behavior_service, request.app.state.settings)
     tracking_service = TrackingService(repository, behavior_service)
-    abc_service = ABCAdaptiveService(repository)
+    confidence_service = ConfidenceService(repository)
+    discovery_service = CareerDiscoveryService()
+    intent_service = ConversationalIntentService(repository)
+    resume_correlation_service = ResumeCorrelationService(repository)
+    abc_service = ABCAdaptiveService(
+        repository,
+        confidence_service=confidence_service,
+        discovery_service=discovery_service,
+    )
+    intelligence_service = IntelligenceService(
+        repository=repository,
+        abc_service=abc_service,
+        intent_service=intent_service,
+        discovery_service=discovery_service,
+        confidence_service=confidence_service,
+    )
+    predictive_career_service = PredictiveCareerService(
+        repository=repository,
+        abc_service=abc_service,
+        resume_service=resume_correlation_service,
+    )
     orchestrator = HuntOrchestrator(
         repository=repository,
         agents=request.app.state.agents,
@@ -50,6 +76,7 @@ async def get_hunt_service(
         strategy_service=strategy_service,
         tracking_service=tracking_service,
         abc_service=abc_service,
+        resume_correlation_service=resume_correlation_service,
     )
     return HuntService(
         repository=repository,
@@ -58,4 +85,7 @@ async def get_hunt_service(
         behavior_service=behavior_service,
         strategy_service=strategy_service,
         abc_service=abc_service,
+        intelligence_service=intelligence_service,
+        resume_correlation_service=resume_correlation_service,
+        predictive_career_service=predictive_career_service,
     )

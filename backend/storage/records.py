@@ -143,6 +143,11 @@ class ApplicationRecord(Base):
     company: Mapped[str] = mapped_column(String(255), nullable=False)
     platform: Mapped[str] = mapped_column(String(128), default="unknown", nullable=False)
     resume_version: Mapped[str] = mapped_column(String(128), default="standard-v1", nullable=False)
+    resume_fingerprint_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("resume_fingerprints.id", ondelete="SET NULL"),
+        index=True,
+    )
     timestamp_applied: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -282,6 +287,125 @@ class UserStrategyProfileRecord(Base):
     application_rates_json: Mapped[dict[str, float]] = mapped_column(JSON, default=dict, nullable=False)
     avg_response_times_json: Mapped[dict[str, float]] = mapped_column(JSON, default=dict, nullable=False)
     category_profiles_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class ConversationTurnRecord(Base):
+    __tablename__ = "conversation_turns"
+    __table_args__ = (
+        Index("ix_conversation_turns_user_created", "user_id", "created_at"),
+        Index("ix_conversation_turns_user_session", "user_id", "session_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    extracted_signals_json: Mapped[dict[str, float]] = mapped_column(
+        JSON,
+        default=dict,
+        nullable=False,
+    )
+    category_preferences_json: Mapped[dict[str, float]] = mapped_column(
+        JSON,
+        default=dict,
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class UserIntelligenceProfileRecord(Base):
+    __tablename__ = "user_intelligence_profiles"
+
+    user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    latest_intent_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        default=dict,
+        nullable=False,
+    )
+    latest_discovery_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        default=dict,
+        nullable=False,
+    )
+    latest_confidence_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        default=dict,
+        nullable=False,
+    )
+    conversation_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class ResumeFingerprintRecord(Base):
+    __tablename__ = "resume_fingerprints"
+    __table_args__ = (
+        UniqueConstraint("user_id", "content_hash", name="uq_resume_fingerprints_user_hash"),
+        Index("ix_resume_fingerprints_user_resume", "user_id", "resume_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    resume_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    resume_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    features_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class ResumeCorrelationProfileRecord(Base):
+    __tablename__ = "resume_correlation_profiles"
+
+    user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    feature_correlations_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        default=dict,
+        nullable=False,
+    )
+    resume_effectiveness_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        default=dict,
+        nullable=False,
+    )
+    total_linked_outcomes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class PredictiveCareerProfileRecord(Base):
+    __tablename__ = "predictive_career_profiles"
+
+    user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    user_vector_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    predictions_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False,
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,

@@ -1,50 +1,101 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { useHuntStore } from "@/lib/store";
+import { motion } from "framer-motion";
+import { Sun, Moon, Monitor, PanelRightOpen, PanelRightClose, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Radio } from "lucide-react";
+import { useTheme } from "@/components/theme/ThemeProvider";
 
-export function TopBar({ title }: { title: string }) {
-  const serverState = useHuntStore((s) => s.serverState);
-  const huntId = useHuntStore((s) => s.huntId);
-  const isPolling = useHuntStore((s) => s.isPolling);
+interface TopBarProps {
+  title: string;
+  contextOpen?: boolean;
+  onToggleContext?: () => void;
+  showContextToggle?: boolean;
+}
+
+const THEME_ICONS = {
+  dark: Moon,
+  light: Sun,
+  system: Monitor,
+} as const;
+
+const THEME_CYCLE: Array<"dark" | "light" | "system"> = ["dark", "light", "system"];
+
+export function TopBar({
+  title,
+  contextOpen = true,
+  onToggleContext,
+  showContextToggle = true,
+}: TopBarProps) {
+  const { theme, setTheme } = useTheme();
+
+  const cycleTheme = () => {
+    const idx = THEME_CYCLE.indexOf(theme);
+    const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
+    setTheme(next);
+  };
+
+  const ThemeIcon = THEME_ICONS[theme];
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/[0.06] bg-[#0B1020]/80 px-6 backdrop-blur-xl">
-      <div className="flex items-center gap-3">
-        <h1 className="text-sm font-semibold text-slate-100">{title}</h1>
-        {isPolling && (
-          <div className="flex items-center gap-1.5">
-            <Radio className="h-3 w-3 text-indigo-400 animate-pulse" />
-            <span className="text-[11px] font-medium text-indigo-400">Live</span>
-          </div>
-        )}
+    <header
+      className="sticky top-0 z-30 flex h-14 items-center justify-between px-6 glass-panel-elevated"
+      style={{
+        borderBottom: "1px solid var(--glass-border)",
+        borderRadius: 0,
+      }}
+    >
+      <div className="flex items-center gap-4">
+        <h1 className="text-sm font-semibold text-foreground">{title}</h1>
       </div>
 
-      <div className="flex items-center gap-2">
-        {huntId && (
-          <Badge
-            variant="outline"
-            className="max-w-[200px] truncate border-white/[0.08] bg-white/[0.03] font-mono text-[10px] text-slate-400"
-          >
-            {huntId}
-          </Badge>
-        )}
-        <Badge
-          variant="outline"
-          className={cn(
-            "text-[10px] font-semibold",
-            serverState.tone === "online" &&
-              "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
-            serverState.tone === "offline" &&
-              "border-red-500/20 bg-red-500/10 text-red-400",
-            serverState.tone === "checking" &&
-              "border-amber-500/20 bg-amber-500/10 text-amber-400"
-          )}
+      <div className="flex items-center gap-1.5">
+        {/* Search trigger */}
+        <button
+          className="flex h-8 items-center gap-2 rounded-lg px-3 text-xs text-muted-foreground transition-all hover:text-foreground"
+          style={{ background: "var(--glass-bg)" }}
         >
-          {serverState.label}
-        </Badge>
+          <Search className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Search</span>
+          <kbd className="hidden sm:inline-flex h-5 items-center rounded border px-1.5 font-mono text-[10px] text-muted-foreground" style={{ borderColor: "var(--glass-border)" }}>
+            ⌘K
+          </kbd>
+        </button>
+
+        {/* Theme toggle */}
+        <button
+          onClick={cycleTheme}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all hover:text-foreground"
+          style={{ background: "var(--glass-bg)" }}
+          title={`Theme: ${theme}`}
+        >
+          <motion.div
+            key={theme}
+            initial={{ rotate: -30, opacity: 0, scale: 0.8 }}
+            animate={{ rotate: 0, opacity: 1, scale: 1 }}
+            exit={{ rotate: 30, opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <ThemeIcon className="h-3.5 w-3.5" />
+          </motion.div>
+        </button>
+
+        {/* Context panel toggle */}
+        {showContextToggle && onToggleContext && (
+          <button
+            onClick={onToggleContext}
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all hover:text-foreground",
+            )}
+            style={{ background: contextOpen ? "var(--sidebar-accent)" : "var(--glass-bg)" }}
+            title={contextOpen ? "Hide intelligence panel" : "Show intelligence panel"}
+          >
+            {contextOpen ? (
+              <PanelRightClose className="h-3.5 w-3.5" />
+            ) : (
+              <PanelRightOpen className="h-3.5 w-3.5" />
+            )}
+          </button>
+        )}
       </div>
     </header>
   );

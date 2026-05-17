@@ -8,6 +8,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from backend.storage.records import Base
+from backend.storage.auth_records import UserRecord, LinkedAccountRecord, SessionRecord
 
 
 class Database:
@@ -99,6 +100,10 @@ class Database:
         if "resume_version" not in existing_columns:
             statements.append(
                 "ALTER TABLE applications ADD COLUMN resume_version VARCHAR(128) NOT NULL DEFAULT 'standard-v1'"
+            )
+        if "resume_fingerprint_id" not in existing_columns:
+            statements.append(
+                "ALTER TABLE applications ADD COLUMN resume_fingerprint_id VARCHAR(64)"
             )
         if "timestamp_applied" not in existing_columns:
             if dialect_name == "postgresql":

@@ -10,6 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from backend.models.career import UserProfile
 from backend.models.job import Job
 
 
@@ -116,6 +117,7 @@ class CategoryStrategyStats(BaseModel):
     application_rate: float = 0.0
     abandonment_rate: float = 0.0
     resume_performance_score: float = 0.0
+    recent_trend_score: float = 0.0
     score: float = 0.0
     weight: float = 0.5
     confidence: float = 0.0
@@ -142,10 +144,18 @@ class RankedJob(BaseModel):
     job_id: str
     rank: int
     job_category: str
+    keyword_match: float
+    skill_match: float
+    education_match: float
+    experience_match: float
+    location_match: float
     base_match_score: float
     behavior_score: float
     outcome_score: float
     category_weight: float
+    confidence: float
+    exploration_bonus: float
+    repetition_penalty: float
     final_score: float
     reason: str
     strategy_weights: dict[str, float] = Field(default_factory=dict)
@@ -158,6 +168,7 @@ class RankJobsRequest(BaseModel):
     user_id: str
     goal: str
     jobs: list[Job]
+    profile: UserProfile | None = None
     hunt_id: str | None = None
     session_id: str | None = None
     filters: dict[str, Any] = Field(default_factory=dict)

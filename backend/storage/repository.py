@@ -33,21 +33,32 @@ from backend.models.behavior import (
 from backend.models.career import CareerRecommendation
 from backend.models.errors import ErrorDetail
 from backend.models.hunt import HuntResult, HuntStatus, StepProgress, StepProgressStatus
+from backend.models.intelligence import ConversationTurn, UserIntelligenceState
 from backend.models.job import Job
 from backend.models.plan import EXPECTED_STEP_ORDER, ExecutionPlan, PlanStep, StepType
+from backend.models.resume_intelligence import (
+    PredictiveCareerProfile,
+    ResumeCorrelationProfile,
+    ResumeFingerprint,
+)
 from backend.services.exceptions import NotFoundError, TooManyRequestsError
 from backend.storage.records import (
     ApplicationRecord,
     BehaviorMetricSnapshotRecord,
     BehaviorEventRecord,
+    ConversationTurnRecord,
     HuntRecord,
     JobRecord,
     OutcomeRecord,
+    PredictiveCareerProfileRecord,
     PlanRecord,
     RateLimitRecord,
     RecommendationEventRecord,
+    ResumeCorrelationProfileRecord,
+    ResumeFingerprintRecord,
     StepExecutionRecord,
     UserStrategyProfileRecord,
+    UserIntelligenceProfileRecord,
     utc_now,
 )
 
@@ -222,10 +233,12 @@ class HuntRepository:
         applications: list[Application],
         *,
         user_key: str,
+        fingerprints_by_application_id: dict[str, ResumeFingerprint] | None = None,
         attempt: int,
         latency_ms: int,
     ) -> None:
         unique_applications = self._dedupe_applications(applications)
+        fingerprints_by_application_id = fingerprints_by_application_id or {}
 
         async with self.session.begin():
             hunt = await self._get_hunt_record(hunt_id, for_update=True)
@@ -233,6 +246,19 @@ class HuntRepository:
             await self.session.execute(
                 delete(ApplicationRecord).where(ApplicationRecord.hunt_id == hunt_id)
             )
+            for fingerprint in fingerprints_by_application_id.values():
+                await self.session.merge(
+                    ResumeFingerprintRecord(
+                        id=fingerprint.fingerprint_id,
+                        user_id=fingerprint.user_id,
+                        resume_id=fingerprint.resume_id,
+                        resume_version=fingerprint.resume_version,
+                        content_hash=fingerprint.content_hash,
+                        features_json=fingerprint.features.model_dump(mode="json"),
+                        created_at=fingerprint.created_at,
+                        updated_at=fingerprint.updated_at,
+                    )
+                )
             self.session.add_all(
                 [
                     ApplicationRecord(
@@ -245,6 +271,11 @@ class HuntRepository:
                         company=application.company,
                         platform=application.platform,
                         resume_version=application.resume_version,
+                        resume_fingerprint_id=(
+                            fingerprints_by_application_id[application.application_id].fingerprint_id
+                            if application.application_id in fingerprints_by_application_id
+                            else None
+                        ),
                         timestamp_applied=application.timestamp_applied,
                         application_status=application.application_status.value,
                         is_referral=application.is_referral,
@@ -541,6 +572,20 @@ class HuntRepository:
             await self.session.commit()
         return records
 
+    async def list_all_application_records(self, user_key: str) -> list[ApplicationRecord]:
+        records = list(
+            (
+                await self.session.scalars(
+                    select(ApplicationRecord)
+                    .where(ApplicationRecord.user_key == user_key)
+                    .order_by(ApplicationRecord.timestamp_applied)
+                )
+            ).all()
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        return records
+
     async def save_behavior_snapshot(self, profile: BehaviorProfile) -> None:
         metrics = profile.metrics
         async with self.session.begin():
@@ -746,6 +791,263 @@ class HuntRepository:
                 )
             )
 
+    async def save_conversation_turn(self, turn: ConversationTurn) -> None:
+        async with self.session.begin():
+            self.session.add(
+                ConversationTurnRecord(
+                    id=turn.turn_id,
+                    user_id=turn.user_id,
+                    session_id=turn.session_id,
+                    message=turn.message,
+                    extracted_signals_json=turn.extracted_signals,
+                    category_preferences_json=turn.category_preferences,
+                    created_at=turn.created_at,
+                )
+            )
+
+    async def list_conversation_turns(
+        self,
+        user_id: str,
+        *,
+        limit: int = 50,
+    ) -> list[ConversationTurn]:
+        records = list(
+            (
+                await self.session.scalars(
+                    select(ConversationTurnRecord)
+                    .where(ConversationTurnRecord.user_id == user_id)
+                    .order_by(ConversationTurnRecord.created_at.desc())
+                    .limit(limit)
+                )
+            ).all()
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        return [
+            ConversationTurn(
+                turn_id=record.id,
+                user_id=record.user_id,
+                session_id=record.session_id,
+                message=record.message,
+                extracted_signals=record.extracted_signals_json,
+                category_preferences=record.category_preferences_json,
+                created_at=record.created_at,
+            )
+            for record in reversed(records)
+        ]
+
+    async def get_user_intelligence_profile(
+        self,
+        user_id: str,
+    ) -> UserIntelligenceState | None:
+        record = await self.session.scalar(
+            select(UserIntelligenceProfileRecord).where(
+                UserIntelligenceProfileRecord.user_id == user_id
+            )
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        if record is None:
+            return None
+        return UserIntelligenceState(
+            user_id=record.user_id,
+            intent=record.latest_intent_json,
+            discovery=record.latest_discovery_json,
+            confidence=record.latest_confidence_json,
+            conversation_count=record.conversation_count,
+            updated_at=record.updated_at,
+        )
+
+    async def upsert_user_intelligence_profile(self, state: UserIntelligenceState) -> None:
+        async with self.session.begin():
+            await self.session.merge(
+                UserIntelligenceProfileRecord(
+                    user_id=state.user_id,
+                    latest_intent_json=state.intent.model_dump(mode="json"),
+                    latest_discovery_json=state.discovery.model_dump(mode="json"),
+                    latest_confidence_json=state.confidence.model_dump(mode="json"),
+                    conversation_count=state.conversation_count,
+                    updated_at=state.updated_at,
+                )
+            )
+
+    async def recent_recommendation_history(
+        self,
+        user_id: str,
+        job_ids: list[str],
+    ) -> dict[str, tuple[float, int]]:
+        if not job_ids:
+            return {}
+        records = list(
+            (
+                await self.session.scalars(
+                    select(RecommendationEventRecord)
+                    .where(RecommendationEventRecord.user_id == user_id)
+                    .where(RecommendationEventRecord.job_id.in_(job_ids))
+                    .order_by(
+                        RecommendationEventRecord.job_id,
+                        RecommendationEventRecord.created_at.desc(),
+                    )
+                )
+            ).all()
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+
+        history: dict[str, tuple[float, int]] = {}
+        for record in records:
+            previous_score, count = history.get(record.job_id, (record.final_score, 0))
+            latest_score = previous_score if count else record.final_score
+            history[record.job_id] = (latest_score, count + 1)
+        return history
+
+    async def upsert_resume_fingerprint(self, fingerprint: ResumeFingerprint) -> None:
+        async with self.session.begin():
+            await self.session.merge(
+                ResumeFingerprintRecord(
+                    id=fingerprint.fingerprint_id,
+                    user_id=fingerprint.user_id,
+                    resume_id=fingerprint.resume_id,
+                    resume_version=fingerprint.resume_version,
+                    content_hash=fingerprint.content_hash,
+                    features_json=fingerprint.features.model_dump(mode="json"),
+                    created_at=fingerprint.created_at,
+                    updated_at=fingerprint.updated_at,
+                )
+            )
+
+    async def get_resume_fingerprint(
+        self,
+        user_id: str,
+        resume_id: str,
+    ) -> ResumeFingerprint | None:
+        record = await self.session.scalar(
+            select(ResumeFingerprintRecord)
+            .where(ResumeFingerprintRecord.user_id == user_id)
+            .where(ResumeFingerprintRecord.resume_id == resume_id)
+            .order_by(ResumeFingerprintRecord.updated_at.desc())
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        if record is None:
+            return None
+        return self._resume_fingerprint_from_record(record)
+
+    async def list_resume_fingerprints(self, user_id: str) -> list[ResumeFingerprint]:
+        records = list(
+            (
+                await self.session.scalars(
+                    select(ResumeFingerprintRecord)
+                    .where(ResumeFingerprintRecord.user_id == user_id)
+                    .order_by(ResumeFingerprintRecord.updated_at)
+                )
+            ).all()
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        return [self._resume_fingerprint_from_record(record) for record in records]
+
+    async def get_resume_fingerprint_records_by_ids(
+        self,
+        fingerprint_ids: list[str],
+    ) -> dict[str, ResumeFingerprint]:
+        if not fingerprint_ids:
+            return {}
+        records = list(
+            (
+                await self.session.scalars(
+                    select(ResumeFingerprintRecord).where(
+                        ResumeFingerprintRecord.id.in_(fingerprint_ids)
+                    )
+                )
+            ).all()
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        return {
+            record.id: self._resume_fingerprint_from_record(record)
+            for record in records
+        }
+
+    async def get_resume_correlation_profile(
+        self,
+        user_id: str,
+    ) -> ResumeCorrelationProfile | None:
+        record = await self.session.scalar(
+            select(ResumeCorrelationProfileRecord).where(
+                ResumeCorrelationProfileRecord.user_id == user_id
+            )
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        if record is None:
+            return None
+        return ResumeCorrelationProfile(
+            user_id=record.user_id,
+            feature_correlations=record.feature_correlations_json,
+            resume_effectiveness=record.resume_effectiveness_json,
+            total_linked_outcomes=record.total_linked_outcomes,
+            updated_at=record.updated_at,
+        )
+
+    async def upsert_resume_correlation_profile(
+        self,
+        profile: ResumeCorrelationProfile,
+    ) -> None:
+        async with self.session.begin():
+            await self.session.merge(
+                ResumeCorrelationProfileRecord(
+                    user_id=profile.user_id,
+                    feature_correlations_json={
+                        key: value.model_dump(mode="json")
+                        for key, value in profile.feature_correlations.items()
+                    },
+                    resume_effectiveness_json={
+                        key: value.model_dump(mode="json")
+                        for key, value in profile.resume_effectiveness.items()
+                    },
+                    total_linked_outcomes=profile.total_linked_outcomes,
+                    updated_at=profile.updated_at,
+                )
+            )
+
+    async def get_predictive_career_profile(
+        self,
+        user_id: str,
+    ) -> PredictiveCareerProfile | None:
+        record = await self.session.scalar(
+            select(PredictiveCareerProfileRecord).where(
+                PredictiveCareerProfileRecord.user_id == user_id
+            )
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        if record is None:
+            return None
+        return PredictiveCareerProfile(
+            user_id=record.user_id,
+            user_vector=record.user_vector_json,
+            predictions=record.predictions_json,
+            updated_at=record.updated_at,
+        )
+
+    async def upsert_predictive_career_profile(
+        self,
+        profile: PredictiveCareerProfile,
+    ) -> None:
+        async with self.session.begin():
+            await self.session.merge(
+                PredictiveCareerProfileRecord(
+                    user_id=profile.user_id,
+                    user_vector_json=profile.user_vector.model_dump(mode="json"),
+                    predictions_json=[
+                        prediction.model_dump(mode="json")
+                        for prediction in profile.predictions
+                    ],
+                    updated_at=profile.updated_at,
+                )
+            )
+
     async def _get_hunt_record(self, hunt_id: str, *, for_update: bool = False) -> HuntRecord:
         statement = select(HuntRecord).where(HuntRecord.hunt_id == hunt_id)
         if for_update:
@@ -833,6 +1135,19 @@ class HuntRepository:
         for application in applications:
             unique.setdefault(application.job_id, application)
         return list(unique.values())
+
+    @staticmethod
+    def _resume_fingerprint_from_record(record: ResumeFingerprintRecord) -> ResumeFingerprint:
+        return ResumeFingerprint(
+            fingerprint_id=record.id,
+            user_id=record.user_id,
+            resume_id=record.resume_id,
+            resume_version=record.resume_version,
+            content_hash=record.content_hash,
+            features=record.features_json,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
 
     @staticmethod
     def _build_progress(

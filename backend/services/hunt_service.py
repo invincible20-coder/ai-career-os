@@ -19,11 +19,28 @@ from backend.models.abc import (
 from backend.models.application import Application
 from backend.models.career import CareerRecommendation, UserProfile
 from backend.models.hunt import HuntResult
+from backend.models.intelligence import (
+    CareerDiscoveryResult,
+    ConfidenceEstimate,
+    ConversationIntentRequest,
+    ConversationalIntent,
+    UserIntelligenceState,
+)
 from backend.models.job import Job
+from backend.models.resume_intelligence import (
+    PredictiveCareerProfile,
+    ResumeAnalysisRequest,
+    ResumeCorrelationProfile,
+    ResumeEffectivenessEstimate,
+    ResumeFingerprint,
+)
 from backend.orchestrator import HuntOrchestrator
 from backend.services.analytics_service import AnalyticsService
 from backend.services.behavior_service import BehaviorService
 from backend.services.abc_service import ABCAdaptiveService
+from backend.services.intelligence_service import IntelligenceService
+from backend.services.predictive_career_service import PredictiveCareerService
+from backend.services.resume_correlation_service import ResumeCorrelationService
 from backend.services.strategy_service import StrategyService
 from backend.storage.repository import HuntRepository
 
@@ -38,6 +55,9 @@ class HuntService:
     behavior_service: BehaviorService
     strategy_service: StrategyService
     abc_service: ABCAdaptiveService
+    intelligence_service: IntelligenceService
+    resume_correlation_service: ResumeCorrelationService
+    predictive_career_service: PredictiveCareerService
 
     async def start_hunt(
         self,
@@ -93,6 +113,7 @@ class HuntService:
             session_id=session_id,
             goal=request.goal,
             jobs=request.jobs,
+            profile=request.profile,
             filters=request.filters,
         )
         return RankJobsResponse(
@@ -103,10 +124,110 @@ class HuntService:
         )
 
     async def log_behavior_event(self, payload: BehaviorEventCreate) -> BehaviorEvent:
-        return await self.abc_service.log_behavior(payload)
+        event = await self.abc_service.log_behavior(payload)
+        intelligence_state = await self.intelligence_service.refresh_state(event.user_id)
+        await self.predictive_career_service.refresh_profile(
+            user_id=event.user_id,
+            intelligence_state=intelligence_state,
+        )
+        return event
 
     async def log_outcome(self, payload: OutcomeCreate) -> OutcomeEvent:
-        return await self.abc_service.log_outcome(payload)
+        event = await self.abc_service.log_outcome(payload)
+        behavior = await self.repository.get_behavior_event_record(event.behavior_event_id)
+        intelligence_state = await self.intelligence_service.refresh_state(behavior.user_id)
+        await self.resume_correlation_service.refresh_profile(behavior.user_id)
+        await self.predictive_career_service.refresh_profile(
+            user_id=behavior.user_id,
+            intelligence_state=intelligence_state,
+        )
+        return event
 
     async def get_abc_strategy_profile(self, user_id: str) -> UserStrategyProfile:
         return await self.abc_service.refresh_strategy_profile(user_id)
+
+    async def record_conversation(
+        self,
+        *,
+        user_id: str,
+        payload: ConversationIntentRequest,
+    ) -> UserIntelligenceState:
+        return await self.intelligence_service.record_conversation(
+            user_id=user_id,
+            session_id=payload.session_id or f"conversation-{user_id}",
+            message=payload.message,
+            profile=payload.profile,
+        )
+
+    async def get_intelligence_profile(
+        self,
+        user_id: str,
+        *,
+        profile: UserProfile | None = None,
+    ) -> UserIntelligenceState:
+        return await self.intelligence_service.get_state(user_id, profile=profile)
+
+    async def get_conversational_intent(self, user_id: str) -> ConversationalIntent:
+        return await self.intelligence_service.get_intent(user_id)
+
+    async def get_career_discovery(
+        self,
+        user_id: str,
+        *,
+        profile: UserProfile | None = None,
+    ) -> CareerDiscoveryResult:
+        return await self.intelligence_service.get_discovery(user_id, profile=profile)
+
+    async def get_confidence(
+        self,
+        user_id: str,
+        *,
+        profile: UserProfile | None = None,
+    ) -> ConfidenceEstimate:
+        return await self.intelligence_service.get_confidence(user_id, profile=profile)
+
+    async def analyze_resume(
+        self,
+        *,
+        user_id: str,
+        payload: ResumeAnalysisRequest,
+    ) -> ResumeFingerprint:
+        fingerprint = await self.resume_correlation_service.analyze_resume(
+            user_id=user_id,
+            resume_id=payload.resume_id,
+            resume_version=payload.resume_version,
+            content=payload.content,
+        )
+        intelligence_state = await self.intelligence_service.refresh_state(user_id)
+        await self.predictive_career_service.refresh_profile(
+            user_id=user_id,
+            intelligence_state=intelligence_state,
+        )
+        return fingerprint
+
+    async def get_resume_correlation_profile(
+        self,
+        user_id: str,
+    ) -> ResumeCorrelationProfile:
+        return await self.resume_correlation_service.refresh_profile(user_id)
+
+    async def get_resume_effectiveness(
+        self,
+        *,
+        user_id: str,
+        resume_id: str,
+    ) -> ResumeEffectivenessEstimate | None:
+        return await self.resume_correlation_service.get_resume_effectiveness(
+            user_id=user_id,
+            resume_id=resume_id,
+        )
+
+    async def get_predictive_career_profile(
+        self,
+        user_id: str,
+    ) -> PredictiveCareerProfile:
+        intelligence_state = await self.intelligence_service.get_state(user_id)
+        return await self.predictive_career_service.refresh_profile(
+            user_id=user_id,
+            intelligence_state=intelligence_state,
+        )

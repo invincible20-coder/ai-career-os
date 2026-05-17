@@ -26,8 +26,11 @@ from backend.models.abc import (
     RecommendationEvent,
     UserStrategyProfile,
 )
+from backend.models.career import UserProfile
 from backend.models.errors import ErrorDetail
 from backend.models.job import Job
+from backend.services.career_discovery_service import CareerDiscoveryService
+from backend.services.confidence_service import ConfidenceService
 from backend.services.exceptions import BadRequestError
 from backend.storage.records import (
     BehaviorEventRecord,
@@ -38,7 +41,17 @@ from backend.storage.records import (
 from backend.storage.repository import HuntRepository
 
 
-_CATEGORIES = ("backend", "frontend", "data", "devops", "mobile", "general")
+_CATEGORIES = (
+    "backend",
+    "frontend",
+    "data",
+    "devops",
+    "mobile",
+    "design",
+    "management",
+    "non_technical",
+    "general",
+)
 _NEUTRAL_WEIGHT = 0.5
 _DECAY_HALF_LIFE_DAYS = 30.0
 logger = get_logger(__name__)
@@ -49,6 +62,8 @@ class ABCAdaptiveService:
     """Closed-loop A -> B -> C -> strategy update -> re-ranking engine."""
 
     repository: HuntRepository
+    confidence_service: ConfidenceService | None = None
+    discovery_service: CareerDiscoveryService | None = None
 
     async def rank_jobs(
         self,
@@ -58,6 +73,7 @@ class ABCAdaptiveService:
         session_id: str,
         goal: str,
         jobs: list[Job],
+        profile: UserProfile | None = None,
         filters: dict[str, Any] | None = None,
     ) -> list[RankedJob]:
         if not jobs:
@@ -65,22 +81,75 @@ class ABCAdaptiveService:
 
         filters = filters or {}
         started_at = perf_counter()
-        profile = await self.get_strategy_profile(user_id)
-        category_weights = self._normalised_weights(profile.category_weights)
+        strategy_profile = await self.get_strategy_profile(user_id)
+        category_weights = self._normalised_weights(strategy_profile.category_weights)
+        intent = None
+        discovery = None
+        confidence = None
+        if self.discovery_service is not None and self.confidence_service is not None:
+            from backend.services.intent_service import ConversationalIntentService
+
+            intent = await ConversationalIntentService(self.repository).get_intent(user_id)
+            discovery = self.discovery_service.discover(
+                intent=intent,
+                strategy_profile=strategy_profile,
+                profile=profile,
+            )
+            confidence = await self.confidence_service.estimate(
+                user_id=user_id,
+                profile=profile,
+                intent=intent,
+                discovery=discovery,
+                strategy_profile=strategy_profile,
+            )
+        history = await self.repository.recent_recommendation_history(
+            user_id,
+            [job.job_id for job in jobs],
+        )
 
         scored: list[RankedJob] = []
         for job in jobs:
             category = self.classify_job(job)
-            category_profile = profile.category_profiles.get(category)
-            base_score = self.base_match_score(job, goal)
+            category_profile = strategy_profile.category_profiles.get(category)
+            keyword_match = self.keyword_match(job, goal)
+            skill_match = self.skill_match(job, profile)
+            education_match = self.education_match(job, profile)
+            experience_match = self.experience_match(job, profile)
+            location_match = self.location_match(job, profile)
+            base_score = self.base_match_score(
+                keyword_match=keyword_match,
+                skill_match=skill_match,
+                education_match=education_match,
+                experience_match=experience_match,
+                location_match=location_match,
+            )
             behavior_score = self._behavior_score(category_profile)
             outcome_score = self._outcome_score(category_profile)
             category_weight = self._category_weight(category_profile, category_weights[category])
-            final_score = round(
-                base_score * 0.40
-                + behavior_score * 0.20
+            confidence_score = confidence.confidence if confidence is not None else 0.0
+            aggressiveness = confidence.ranking_aggressiveness if confidence is not None else 0.25
+            exploration_bonus = self._exploration_bonus(
+                category,
+                discovery,
+                confidence_score,
+            )
+            previous_score, exposure_count = history.get(job.job_id, (base_score, 0))
+            repetition_penalty = self._repetition_penalty(exposure_count)
+            learned_score = (
+                base_score * 0.35
+                + behavior_score * 0.25
                 + outcome_score * 0.25
-                + category_weight * 0.15,
+                + category_weight * 0.15
+            )
+            confidence_blended_score = base_score * (1 - aggressiveness) + learned_score * aggressiveness
+            raw_score = max(
+                0.0,
+                min(1.0, confidence_blended_score + exploration_bonus - repetition_penalty),
+            )
+            final_score = round(
+                previous_score * 0.35 + raw_score * 0.65
+                if exposure_count
+                else raw_score,
                 4,
             )
             scored.append(
@@ -90,12 +159,26 @@ class ABCAdaptiveService:
                     job_id=job.job_id,
                     rank=0,
                     job_category=category,
+                    keyword_match=keyword_match,
+                    skill_match=skill_match,
+                    education_match=education_match,
+                    experience_match=experience_match,
+                    location_match=location_match,
                     base_match_score=base_score,
                     behavior_score=behavior_score,
                     outcome_score=outcome_score,
                     category_weight=category_weight,
+                    confidence=confidence_score,
+                    exploration_bonus=exploration_bonus,
+                    repetition_penalty=repetition_penalty,
                     final_score=final_score,
-                    reason=self._reason(category, base_score, category_profile),
+                    reason=self._reason(
+                        category,
+                        base_score,
+                        category_profile,
+                        confidence,
+                        discovery,
+                    ),
                     strategy_weights=category_weights,
                     filters=filters,
                 )
@@ -393,6 +476,7 @@ class ABCAdaptiveService:
                 application_rate=round(application_rate, 4),
                 abandonment_rate=round(abandonment_rate, 4),
                 resume_performance_score=round(resume_effectiveness, 4),
+                recent_trend_score=score,
                 score=score,
                 weight=weight,
                 confidence=round(confidence, 4),
@@ -430,6 +514,9 @@ class ABCAdaptiveService:
             "data": {"data", "ml", "machine", "analytics", "etl", "pipeline", "pandas"},
             "devops": {"devops", "cloud", "docker", "kubernetes", "terraform", "sre", "infrastructure"},
             "mobile": {"mobile", "android", "ios", "swift", "kotlin", "react native"},
+            "design": {"design", "ux", "figma", "visual", "prototype"},
+            "management": {"management", "manager", "lead", "program", "operations"},
+            "non_technical": {"sales", "marketing", "support", "business", "recruiting"},
         }
         scores = {
             category: sum(1 for keyword in keywords if keyword in text)
@@ -439,7 +526,7 @@ class ABCAdaptiveService:
         return best_category if best_score > 0 else "general"
 
     @staticmethod
-    def base_match_score(job: Job, goal: str) -> float:
+    def keyword_match(job: Job, goal: str) -> float:
         goal_terms = ABCAdaptiveService._terms(goal)
         job_terms = ABCAdaptiveService._terms(
             " ".join([job.title, job.description, " ".join(job.requirements), job.location])
@@ -448,8 +535,63 @@ class ABCAdaptiveService:
             return 0.5
         overlap = len(goal_terms & job_terms)
         title_bonus = 0.15 if goal.lower() in job.title.lower() else 0.0
-        skill_bonus = min(0.2, len(set(job.requirements) & goal_terms) * 0.05)
-        return round(min(1.0, overlap / len(goal_terms) + title_bonus + skill_bonus), 4)
+        return round(min(1.0, overlap / len(goal_terms) + title_bonus), 4)
+
+    @staticmethod
+    def skill_match(job: Job, profile: UserProfile | None) -> float:
+        if profile is None or not profile.skills:
+            return 0.5
+        profile_terms = ABCAdaptiveService._terms(" ".join(profile.skills))
+        job_terms = ABCAdaptiveService._terms(
+            " ".join([job.title, job.description, " ".join(job.requirements)])
+        )
+        return ABCAdaptiveService._overlap_score(profile_terms, job_terms)
+
+    @staticmethod
+    def education_match(job: Job, profile: UserProfile | None) -> float:
+        if profile is None or not profile.education:
+            return 0.5
+        return ABCAdaptiveService._overlap_score(
+            ABCAdaptiveService._terms(profile.education),
+            ABCAdaptiveService._terms(" ".join([job.description, " ".join(job.requirements)])),
+        )
+
+    @staticmethod
+    def experience_match(job: Job, profile: UserProfile | None) -> float:
+        if profile is None or not profile.experience:
+            return 0.5
+        return ABCAdaptiveService._overlap_score(
+            ABCAdaptiveService._terms(profile.experience),
+            ABCAdaptiveService._terms(" ".join([job.description, " ".join(job.requirements)])),
+        )
+
+    @staticmethod
+    def location_match(job: Job, profile: UserProfile | None) -> float:
+        if profile is None or not profile.preferred_locations:
+            return 0.5
+        job_location = job.location.lower()
+        if any(location.lower() in job_location for location in profile.preferred_locations):
+            return 1.0
+        if "remote" in job_location:
+            return 0.75
+        return 0.0
+
+    @staticmethod
+    def base_match_score(
+        *,
+        keyword_match: float,
+        skill_match: float,
+        education_match: float,
+        experience_match: float,
+        location_match: float,
+    ) -> float:
+        core_score = (
+            keyword_match * 0.30
+            + skill_match * 0.30
+            + experience_match * 0.20
+            + location_match * 0.20
+        )
+        return round(core_score * 0.90 + education_match * 0.10, 4)
 
     @staticmethod
     def _terms(value: str) -> set[str]:
@@ -459,6 +601,12 @@ class ABCAdaptiveService:
             for token in re.findall(r"[a-z0-9]+", value.lower())
             if token not in stop_words and len(token) > 1
         }
+
+    @staticmethod
+    def _overlap_score(left: set[str], right: set[str]) -> float:
+        if not left:
+            return 0.5
+        return round(min(1.0, len(left & right) / len(left)), 4)
 
     @staticmethod
     def _validate_behavior_context(
@@ -505,10 +653,17 @@ class ABCAdaptiveService:
     def _behavior_score(profile: CategoryStrategyStats | None) -> float:
         if profile is None:
             return _NEUTRAL_WEIGHT
-        return round(
-            profile.click_rate * 0.45
+        session_engagement = min(
+            1.0,
+            profile.click_rate * 0.5 + profile.application_rate * 0.5,
+        )
+        base_behavior = (
+            profile.click_rate * 0.40
             + profile.application_rate * 0.40
-            + (1 - profile.abandonment_rate) * 0.15,
+            - profile.abandonment_rate * 0.20
+        )
+        return round(
+            max(0.0, min(1.0, base_behavior * 0.85 + session_engagement * 0.15)),
             4,
         )
 
@@ -525,10 +680,23 @@ class ABCAdaptiveService:
             prior=0.2,
         )
         response_speed = min(1.0, 1 / max(profile.avg_response_time, 1.0))
+        offer_rate = ABCAdaptiveService._smoothed_rate(
+            profile.offers_count,
+            max(profile.applications_count, profile.offers_count),
+            prior=0.05,
+        )
+        interview_rate = ABCAdaptiveService._smoothed_rate(
+            profile.interviews_count,
+            max(profile.applications_count, profile.interviews_count),
+            prior=0.15,
+        )
+        core_outcome = (
+            interview_rate * 0.50
+            + offer_rate * 0.30
+            + response_speed * 0.20
+        )
         return round(
-            profile.success_rate * 0.70
-            + response_speed * 0.10
-            + (1 - rejection_rate) * 0.20,
+            core_outcome * 0.75 + (1 - rejection_rate) * 0.25,
             4,
         )
 
@@ -537,9 +705,17 @@ class ABCAdaptiveService:
         category: str,
         base_score: float,
         profile: CategoryStrategyStats | None,
+        confidence,
+        discovery,
     ) -> str:
         if profile is None or profile.confidence < 0.2:
             return f"Cold start: ranked by {category} match strength"
+        if confidence is not None and confidence.exploration_mode:
+            return f"Exploration mode: broadening {category} results while confidence is still low"
+        if discovery is not None and discovery.career_paths:
+            top_category = discovery.career_paths[0].category
+            if category == top_category and discovery.career_paths[0].score >= 0.55:
+                return f"{category} aligns with the strongest current career discovery signal"
         if profile.success_rate >= 0.35:
             return f"Strong {category} interview and offer history"
         if profile.application_rate >= 0.45:
@@ -549,6 +725,24 @@ class ABCAdaptiveService:
         if base_score >= 0.75:
             return f"Strong static match with learned {category} strategy"
         return f"Balanced {category} recommendation using current strategy weights"
+
+    @staticmethod
+    def _exploration_bonus(category: str, discovery, confidence_score: float) -> float:
+        if discovery is None or not discovery.career_paths:
+            return 0.0
+        discovered = next(
+            (path for path in discovery.career_paths if path.category == category),
+            None,
+        )
+        if discovered is None:
+            return 0.0
+        return round((1 - confidence_score) * discovered.score * 0.08, 4)
+
+    @staticmethod
+    def _repetition_penalty(exposure_count: int) -> float:
+        if exposure_count <= 0:
+            return 0.0
+        return round(min(0.12, exposure_count * 0.02), 4)
 
     @staticmethod
     def _smoothed_rate(

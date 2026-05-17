@@ -20,6 +20,7 @@ Built with request-safe concurrency, SQL-backed persistence, strict plan validat
 | **Structured logging** | JSON logs with `hunt_id`, step name, latency, and failure details |
 | **Adaptive strategy** | Application behavior is tracked, classified, and used to adjust future hunts |
 | **ABC re-ranking loop** | Recommendations log antecedents, behaviors, and outcomes, then update user-specific strategy weights |
+| **Connected intelligence layer** | Intent, career discovery, confidence, and adaptive ranking evolve together over time |
 
 ---
 
@@ -102,6 +103,8 @@ backend/
 │   ├── application.py       # Application + tracker models
 │   ├── abc.py               # ABC recommendation, behavior, outcome, and strategy models
 │   ├── career.py            # UserProfile + career recommendation models
+│   ├── intelligence.py      # Intent, discovery, confidence, and intelligence-state models
+│   ├── resume_intelligence.py # Resume correlation + predictive career models
 │   ├── errors.py            # Structured ErrorDetail model
 │   ├── hunt.py              # Hunt lifecycle models (HuntResult)
 │   ├── job.py               # Job models
@@ -112,8 +115,14 @@ backend/
 │   ├── analytics_service.py  # Application metrics and performance reports
 │   ├── abc_service.py        # ABC-driven adaptive recommendation and re-ranking
 │   ├── behavior_service.py   # Deterministic behavior classification
+│   ├── career_discovery_service.py # Ambiguity-preserving career path discovery
+│   ├── confidence_service.py # Reliability scoring + exploration gating
 │   ├── exceptions.py        # Domain exceptions with HTTP status mapping
 │   ├── hunt_service.py      # API-facing service layer
+│   ├── intelligence_service.py # Connected intelligence coordinator
+│   ├── intent_service.py     # Rolling conversational intent extraction
+│   ├── predictive_career_service.py # Long-term probabilistic career trajectories
+│   ├── resume_correlation_service.py # Resume fingerprints + outcome correlations
 │   ├── plan_validator.py    # Strict plan validation rules
 │   ├── strategy_service.py  # Behavior-aware hunt strategy adjustments
 │   └── tracking_service.py  # Behavior snapshot persistence
@@ -147,6 +156,11 @@ tests/
 | `behavior_events` | User actions linked to a specific recommendation context | `antecedent_event_id` FK |
 | `outcomes` | Consequences linked to behavior events | `behavior_event_id` FK |
 | `user_strategy_profiles` | Learned per-user category weights and rates | `user_id` |
+| `conversation_turns` | Persisted conversational evidence for evolving intent | `user_id`, `session_id` |
+| `user_intelligence_profiles` | Latest intent, discovery, and confidence snapshots | `user_id` |
+| `resume_fingerprints` | Deterministic resume feature vectors keyed by resume content | `user_id`, `content_hash` |
+| `resume_correlation_profiles` | Confidence-aware resume/outcome correlations | `user_id` |
+| `predictive_career_profiles` | Latest long-term user vector and career trajectories | `user_id` |
 
 All reads and writes are scoped by `hunt_id`, so simultaneous hunts are fully isolated.
 Behavior analytics are scoped by `user_key`, which comes from `X-User-Id` when supplied, then falls back to the caller IP.
@@ -318,6 +332,215 @@ Where it fits in the pipeline:
 - `POST /api/v1/hunts` reuses the same agent automatically when the submitted goal is vague or missing.
 - The top recommendation becomes the refined goal passed to the Planner Agent.
 - The hunt response includes the structured recommendation payload and whether the final goal was auto-selected.
+
+## 🧠 Adaptive Intelligence Layer
+
+The adaptive layer now closes a broader loop:
+
+```text
+Conversation
+  -> Conversational Intent Engine
+  -> Career Discovery Engine
+  -> Confidence Engine
+  -> Adaptive Re-Ranking Engine
+  -> Recommendations
+  -> Behavior Events
+  -> Outcomes
+  -> Updated Strategy Weights
+  -> New Recommendations
+```
+
+### 1. Conversational Intent Engine
+
+- Stores conversation turns in SQL instead of treating every message as stateless.
+- Extracts rolling signals for career clarity, uncertainty, urgency, frustration, curiosity, commitment, and category preference.
+- Uses temporal blending so intent evolves gradually instead of flipping after one message.
+
+### 2. Career Discovery Engine
+
+- Combines conversational preference, profile signals, engagement history, and outcome history.
+- Returns multiple plausible career paths while ambiguity is high.
+- Keeps users in exploration mode when evidence is sparse or conflicting.
+
+### 3. Confidence Engine
+
+- Scores recommendation reliability from profile completeness, behavioral consistency, outcome reliability, and data volume.
+- Low confidence automatically reduces ranking aggressiveness and keeps broader exploration active.
+- Higher confidence allows the ranker to exploit learned category weights more strongly.
+
+### 4. Adaptive Re-Ranking Engine
+
+- Combines static signals, behavioral signals, outcome signals, category weights, exploration bonuses, repetition penalties, and score smoothing.
+- Two users with different histories can receive different orderings for the same jobs.
+- Negative outcomes reduce future ranking strength, while repeated success increases learned category preference over time.
+
+### Intelligence Endpoints
+
+#### Update remembered intent
+
+```http
+POST /api/v1/intelligence/intent?user_id=user_123
+```
+
+```json
+{
+  "message": "I don't know what to do anymore.",
+  "session_id": "session_1"
+}
+```
+
+## 📄 Resume Correlation and Predictive Career Modeling
+
+These two engines extend the adaptive loop from "what jobs should be shown next?" into "which resume patterns appear to correlate with better outcomes?" and "which long-term directions currently look most compatible?"
+
+```text
+Resume Content
+  -> Deterministic Fingerprint
+  -> Outcome Correlation Profile
+  -> Predictive Career User Vector
+  -> Probabilistic Career Trajectories
+  -> New Applications / Outcomes
+  -> Updated Correlations and Predictions
+```
+
+### Resume-to-Outcome Correlation Engine
+
+- Extracts reproducible resume fingerprints from the exact text used in an application.
+- Tracks ATS score, keyword density, quantified achievements, complexity, diversity, education strength, experience depth, readability, formatting, and action-verb usage.
+- Learns correlations with interviews, rejections, offers, and response speed.
+- Exposes `confidence`, `data_volume`, and `uncertainty` for every correlation so sparse evidence stays visibly weak instead of pretending to be proof.
+- Estimates resume effectiveness from both outcome evidence and structural quality; it reports correlation, never causation.
+
+### Predictive Career Modeling Engine
+
+- Builds evolving user vectors from resume signals, behavioral history, outcomes, and conversational intent.
+- Compares those user vectors against fixed career archetype vectors using cosine similarity.
+- Produces compatibility, growth potential, trajectory stability, persistence probability, adaptability, confidence, and uncertainty.
+- Refreshes after new behaviors and outcomes so career projections change as the user changes.
+
+### Resume and Prediction Endpoints
+
+#### Analyze a resume deterministically
+
+```http
+POST /api/v1/resume-intelligence/analyze?user_id=user_123
+```
+
+```json
+{
+  "resume_id": "resume_v4",
+  "resume_version": "targeted-v2",
+  "content": "Backend engineer with 5 years experience..."
+}
+```
+
+#### Inspect learned resume correlations
+
+```http
+GET /api/v1/resume-intelligence/correlations?user_id=user_123
+```
+
+Example excerpt:
+
+```json
+{
+  "feature_correlations": {
+    "quantified_achievements": {
+      "interview_correlation": 0.41,
+      "rejection_correlation": -0.22,
+      "confidence": 0.36,
+      "data_volume": 8,
+      "uncertainty": 0.64
+    }
+  }
+}
+```
+
+#### Inspect one resume's current effectiveness
+
+```http
+GET /api/v1/resume-intelligence/effectiveness/resume_v4?user_id=user_123
+```
+
+#### Read long-term predictive career modeling
+
+```http
+GET /api/v1/predictive-career/profile?user_id=user_123
+```
+
+Example excerpt:
+
+```json
+{
+  "predictions": [
+    {
+      "role": "Backend Engineering",
+      "category": "backend",
+      "compatibility": 0.84,
+      "growth_potential": 0.78,
+      "trajectory_stability": 0.63,
+      "confidence": 0.57,
+      "uncertainty": 0.43
+    }
+  ]
+}
+```
+
+#### Explore likely career paths
+
+```http
+POST /api/v1/intelligence/career-discovery?user_id=user_123
+```
+
+```json
+{
+  "skills": ["Python", "APIs"],
+  "interests": ["building systems"]
+}
+```
+
+#### Estimate recommendation confidence
+
+```http
+POST /api/v1/intelligence/confidence?user_id=user_123
+```
+
+```json
+{
+  "skills": ["Python", "FastAPI"],
+  "education": "Computer Science",
+  "experience": "Built backend systems"
+}
+```
+
+#### Read the full current intelligence state
+
+```http
+GET /api/v1/intelligence/profile?user_id=user_123
+```
+
+Example state excerpt:
+
+```json
+{
+  "intent": {
+    "career_clarity": 0.32,
+    "uncertainty": 0.74,
+    "exploration_mode": true
+  },
+  "discovery": {
+    "career_paths": [
+      {"role": "Backend Engineer", "category": "backend", "score": 0.78},
+      {"role": "Data Analyst", "category": "data", "score": 0.61}
+    ]
+  },
+  "confidence": {
+    "confidence": 0.41,
+    "exploration_mode": true,
+    "ranking_aggressiveness": 0.5165
+  }
+}
+```
 
 ## 📈 Behavior Analysis and Adaptive Strategy
 
