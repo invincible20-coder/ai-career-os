@@ -4,11 +4,13 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: "/api/:path*",
+        // Proxy /api/* to FastAPI EXCEPT /api/auth/* (NextAuth routes)
+        source: "/api/:path((?!auth).*)",
         destination: "http://localhost:8000/api/:path*",
       },
     ];
   },
 };
+
 
 export default nextConfig;
