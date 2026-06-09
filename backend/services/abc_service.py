@@ -31,6 +31,7 @@ from backend.models.errors import ErrorDetail
 from backend.models.job import Job
 from backend.services.career_discovery_service import CareerDiscoveryService
 from backend.services.confidence_service import ConfidenceService
+from backend.services.event_bus import EventBus
 from backend.services.exceptions import BadRequestError
 from backend.storage.records import (
     BehaviorEventRecord,
@@ -64,6 +65,7 @@ class ABCAdaptiveService:
     repository: HuntRepository
     confidence_service: ConfidenceService | None = None
     discovery_service: CareerDiscoveryService | None = None
+    event_bus: EventBus | None = None
 
     async def rank_jobs(
         self,
@@ -126,13 +128,20 @@ class ABCAdaptiveService:
             behavior_score = self._behavior_score(category_profile)
             outcome_score = self._outcome_score(category_profile)
             category_weight = self._category_weight(category_profile, category_weights[category])
-            confidence_score = confidence.confidence if confidence is not None else 0.0
+            evidence_strength = self._evidence_strength(category_profile)
+            confidence_score = (
+                confidence.confidence
+                if confidence is not None
+                else evidence_strength
+            )
             aggressiveness = confidence.ranking_aggressiveness if confidence is not None else 0.25
             exploration_bonus = self._exploration_bonus(
                 category,
                 discovery,
                 confidence_score,
             )
+            trust_score = job.trust_score if job.trust_score is not None else 1.0
+            trust_penalty = round((1 - trust_score) * 0.10 + min(0.10, len(job.scam_flags) * 0.03), 4)
             previous_score, exposure_count = history.get(job.job_id, (base_score, 0))
             repetition_penalty = self._repetition_penalty(exposure_count)
             learned_score = (
@@ -152,6 +161,7 @@ class ABCAdaptiveService:
                 else raw_score,
                 4,
             )
+            final_score = round(max(0.0, final_score - trust_penalty), 4)
             scored.append(
                 RankedJob(
                     job=job,
@@ -169,6 +179,9 @@ class ABCAdaptiveService:
                     outcome_score=outcome_score,
                     category_weight=category_weight,
                     confidence=confidence_score,
+                    confidence_percent=round(confidence_score * 100, 2),
+                    uncertainty_percent=round((1 - confidence_score) * 100, 2),
+                    evidence_strength=evidence_strength,
                     exploration_bonus=exploration_bonus,
                     repetition_penalty=repetition_penalty,
                     final_score=final_score,
@@ -179,6 +192,24 @@ class ABCAdaptiveService:
                         confidence,
                         discovery,
                     ),
+                    explanation=self._explanation(
+                        category=category,
+                        base_score=base_score,
+                        behavior_score=behavior_score,
+                        outcome_score=outcome_score,
+                        category_weight=category_weight,
+                        confidence_score=confidence_score,
+                        profile=category_profile,
+                    ),
+                    signal_breakdown={
+                        "base_match_score": base_score,
+                        "behavior_score": behavior_score,
+                        "outcome_score": outcome_score,
+                        "category_weight": category_weight,
+                        "exploration_bonus": exploration_bonus,
+                        "repetition_penalty": repetition_penalty,
+                        "trust_penalty": trust_penalty,
+                    },
                     strategy_weights=category_weights,
                     filters=filters,
                 )
@@ -220,7 +251,13 @@ class ABCAdaptiveService:
                     final_score=updated.final_score,
                     recommendation_reason=updated.reason,
                     strategy_weights_used=updated.strategy_weights,
-                    filters_applied=updated.filters,
+                    filters_applied={
+                        **updated.filters,
+                        "signal_breakdown": updated.signal_breakdown,
+                        "explanation": updated.explanation,
+                        "confidence": updated.confidence,
+                        "uncertainty_percent": updated.uncertainty_percent,
+                    },
                     session_id=session_id,
                     job_category=updated.job_category,
                     timestamp=now,
@@ -228,6 +265,24 @@ class ABCAdaptiveService:
             )
 
         await self.repository.save_recommendation_events(events)
+        await self._publish(
+            session_id,
+            {
+                "type": "recommendations_ranked",
+                "user_id": user_id,
+                "hunt_id": hunt_id,
+                "recommendations": [
+                    {
+                        "job_id": item.job_id,
+                        "rank": item.rank,
+                        "category": item.job_category,
+                        "final_score": item.final_score,
+                        "reason": item.reason,
+                    }
+                    for item in ranked
+                ],
+            },
+        )
         logger.info(
             "abc_recommendations_ranked",
             extra={
@@ -264,6 +319,18 @@ class ABCAdaptiveService:
         )
         await self.repository.save_behavior_event(event)
         await self.refresh_strategy_profile(event.user_id)
+        await self._publish(
+            event.session_id,
+            {
+                "type": "behavior_logged",
+                "user_id": event.user_id,
+                "hunt_id": event.hunt_id,
+                "event_id": event.event_id,
+                "event_type": event.event_type.value,
+                "job_id": event.job_id,
+                "category": event.job_category,
+            },
+        )
         logger.info(
             "abc_behavior_logged",
             extra={
@@ -291,6 +358,18 @@ class ABCAdaptiveService:
         )
         await self.repository.save_outcome_event(event)
         await self.refresh_strategy_profile(behavior.user_id)
+        await self._publish(
+            behavior.session_id,
+            {
+                "type": "outcome_logged",
+                "user_id": behavior.user_id,
+                "hunt_id": behavior.hunt_id,
+                "outcome_id": event.outcome_id,
+                "outcome_type": event.outcome_type.value,
+                "job_id": behavior.job_id,
+                "category": behavior.category,
+            },
+        )
         logger.info(
             "abc_outcome_logged",
             extra={
@@ -353,6 +432,7 @@ class ABCAdaptiveService:
         starts_by_category: dict[str, float] = defaultdict(float)
         applications_by_category: dict[str, float] = defaultdict(float)
         abandons_by_category: dict[str, float] = defaultdict(float)
+        ignores_by_category: dict[str, float] = defaultdict(float)
         resume_selected_by_category: dict[str, float] = defaultdict(float)
         behaviors_by_category: dict[str, float] = defaultdict(float)
         outcomes_by_category: dict[str, float] = defaultdict(float)
@@ -385,6 +465,8 @@ class ABCAdaptiveService:
                 applications_by_category[category] += weight
             if record.event_type == BehaviorEventType.APPLICATION_ABANDONED.value:
                 abandons_by_category[category] += weight
+            if record.event_type == BehaviorEventType.JOB_IGNORED.value:
+                ignores_by_category[category] += weight
             if record.event_type == BehaviorEventType.RESUME_SELECTED.value and record.resume_id:
                 resume_selected_by_category[category] += weight
 
@@ -428,6 +510,7 @@ class ABCAdaptiveService:
             starts = starts_by_category[category]
             applications = applications_by_category[category]
             abandons = abandons_by_category[category]
+            ignores = ignores_by_category[category]
             outcomes = outcomes_by_category[category]
             successes = success_by_category[category]
             no_responses = no_response_by_category[category]
@@ -443,6 +526,7 @@ class ABCAdaptiveService:
                 prior=0.25,
             )
             abandonment_rate = self._smoothed_rate(abandons, max(starts, applications), prior=0.15)
+            ignore_rate = self._smoothed_rate(ignores, max(shown, ignores), prior=0.1)
             success_rate = self._smoothed_rate(successes, max(applications, outcomes), prior=0.25)
             response_speed = min(1.0, 1 / max(avg_response, 1.0))
             resume_effectiveness = self._smoothed_rate(
@@ -458,6 +542,7 @@ class ABCAdaptiveService:
                 + resume_effectiveness * 0.10,
                 4,
             )
+            score = round(max(0.0, score - ignore_rate * 0.10), 4)
             previous_weight = old_profile.category_weights.get(category, _NEUTRAL_WEIGHT)
             raw_weight = previous_weight * 0.7 + score * 0.3
             confidence = min(1.0, (shown + behaviors_by_category[category] * 0.05 + outcomes) / 8.0)
@@ -475,6 +560,7 @@ class ABCAdaptiveService:
                 click_rate=round(click_rate, 4),
                 application_rate=round(application_rate, 4),
                 abandonment_rate=round(abandonment_rate, 4),
+                ignore_rate=round(ignore_rate, 4),
                 resume_performance_score=round(resume_effectiveness, 4),
                 recent_trend_score=score,
                 score=score,
@@ -663,7 +749,15 @@ class ABCAdaptiveService:
             - profile.abandonment_rate * 0.20
         )
         return round(
-            max(0.0, min(1.0, base_behavior * 0.85 + session_engagement * 0.15)),
+            max(
+                0.0,
+                min(
+                    1.0,
+                    base_behavior * 0.85
+                    + session_engagement * 0.15
+                    - profile.ignore_rate * 0.15,
+                ),
+            ),
             4,
         )
 
@@ -727,6 +821,49 @@ class ABCAdaptiveService:
         return f"Balanced {category} recommendation using current strategy weights"
 
     @staticmethod
+    def _evidence_strength(profile: CategoryStrategyStats | None) -> float:
+        if profile is None:
+            return 0.0
+        signal_volume = (
+            profile.applications_count
+            + profile.interviews_count
+            + profile.offers_count
+            + profile.rejection_count
+            + profile.no_response_count
+        )
+        return round(min(1.0, profile.confidence * 0.65 + min(1.0, signal_volume / 20) * 0.35), 4)
+
+    @staticmethod
+    def _explanation(
+        *,
+        category: str,
+        base_score: float,
+        behavior_score: float,
+        outcome_score: float,
+        category_weight: float,
+        confidence_score: float,
+        profile: CategoryStrategyStats | None,
+    ) -> list[str]:
+        statements = [
+            f"Static match contributed {base_score:.2f} from skills, keywords, experience, and location.",
+            f"Learned {category} weight is {category_weight:.2f}; confidence is {confidence_score:.2f}.",
+        ]
+        if profile is None or profile.confidence < 0.2:
+            statements.append("Evidence is sparse, so the engine keeps the ranking close to base match.")
+            return statements
+        statements.append(
+            f"Behavior score is {behavior_score:.2f} from click, application, ignore, and abandonment history."
+        )
+        statements.append(
+            f"Outcome score is {outcome_score:.2f} from interviews, offers, rejections, no responses, and response speed."
+        )
+        if profile.success_rate >= 0.35:
+            statements.append(f"{category} has a strong observed success rate of {profile.success_rate:.2f}.")
+        if profile.ignore_rate >= 0.35:
+            statements.append(f"{category} has been ignored often, so future ranking is dampened.")
+        return statements
+
+    @staticmethod
     def _exploration_bonus(category: str, discovery, confidence_score: float) -> float:
         if discovery is None or not discovery.career_paths:
             return 0.0
@@ -780,3 +917,8 @@ class ABCAdaptiveService:
             category_profiles=neutral_profiles,
             updated_at=now,
         )
+
+    async def _publish(self, channel: str, payload: dict[str, Any]) -> None:
+        if self.event_bus is None:
+            return
+        await self.event_bus.publish(channel, payload)

@@ -33,6 +33,8 @@ from backend.models.resume_intelligence import (
     ResumeCorrelationProfile,
     ResumeEffectivenessEstimate,
     ResumeFingerprint,
+    ResumeIntelligenceReport,
+    ResumeVersionComparison,
 )
 from backend.orchestrator import HuntOrchestrator
 from backend.services.analytics_service import AnalyticsService
@@ -205,6 +207,26 @@ class HuntService:
         )
         return fingerprint
 
+    async def analyze_resume_report(
+        self,
+        *,
+        user_id: str,
+        payload: ResumeAnalysisRequest,
+    ) -> ResumeIntelligenceReport:
+        report = await self.resume_correlation_service.analyze_resume_report(
+            user_id=user_id,
+            resume_id=payload.resume_id,
+            resume_version=payload.resume_version,
+            content=payload.content,
+            target_role=payload.target_role,
+        )
+        intelligence_state = await self.intelligence_service.refresh_state(user_id)
+        await self.predictive_career_service.refresh_profile(
+            user_id=user_id,
+            intelligence_state=intelligence_state,
+        )
+        return report
+
     async def get_resume_correlation_profile(
         self,
         user_id: str,
@@ -220,6 +242,19 @@ class HuntService:
         return await self.resume_correlation_service.get_resume_effectiveness(
             user_id=user_id,
             resume_id=resume_id,
+        )
+
+    async def compare_resume_versions(
+        self,
+        *,
+        user_id: str,
+        left_resume_id: str,
+        right_resume_id: str,
+    ) -> ResumeVersionComparison | None:
+        return await self.resume_correlation_service.compare_resume_versions(
+            user_id=user_id,
+            left_resume_id=left_resume_id,
+            right_resume_id=right_resume_id,
         )
 
     async def get_predictive_career_profile(

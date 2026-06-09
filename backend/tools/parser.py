@@ -66,6 +66,11 @@ def _parse_single(raw_job: dict[str, Any]) -> Job:
         url=raw_job.get("url"),
         source=raw_job.get("source", "unknown"),
         posted_date=raw_job.get("posted_date"),
+        trust_score=raw_job.get("trust_score"),
+        source_confidence=raw_job.get("source_confidence"),
+        legitimacy_probability=raw_job.get("legitimacy_probability"),
+        scam_flags=raw_job.get("scam_flags") or [],
+        duplicate_of=raw_job.get("duplicate_of"),
     )
 
 

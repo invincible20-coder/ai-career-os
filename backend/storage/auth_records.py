@@ -81,3 +81,26 @@ class SessionRecord(Base):
         default=utc_now,
         nullable=False,
     )
+
+
+class IdentityIntelligenceRecord(Base):
+    __tablename__ = "identity_intelligence"
+
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    provider_intelligence_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        default=dict,
+        nullable=False,
+    )
+    adaptive_memory_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        default=dict,
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )

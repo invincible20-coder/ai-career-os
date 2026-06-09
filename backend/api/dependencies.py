@@ -56,6 +56,7 @@ async def get_hunt_service(
         repository,
         confidence_service=confidence_service,
         discovery_service=discovery_service,
+        event_bus=request.app.state.event_bus,
     )
     intelligence_service = IntelligenceService(
         repository=repository,
@@ -77,6 +78,7 @@ async def get_hunt_service(
         tracking_service=tracking_service,
         abc_service=abc_service,
         resume_correlation_service=resume_correlation_service,
+        event_bus=request.app.state.event_bus,
     )
     return HuntService(
         repository=repository,

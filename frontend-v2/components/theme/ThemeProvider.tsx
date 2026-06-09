@@ -39,19 +39,25 @@ function resolveTheme(theme: Theme): "dark" | "light" {
   return theme;
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("dark");
-  const [resolved, setResolved] = useState<"dark" | "light">("dark");
+function isTheme(value: string | null): value is Theme {
+  return value === "dark" || value === "light" || value === "system";
+}
 
-  // Read saved preference on mount
+function readInitialTheme(): Theme {
+  if (typeof window === "undefined") return "dark";
+  const saved = localStorage.getItem("huntai-theme");
+  return isTheme(saved) ? saved : "dark";
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setThemeState] = useState<Theme>(() => readInitialTheme());
+  const [resolved, setResolved] = useState<"dark" | "light">(() =>
+    resolveTheme(readInitialTheme())
+  );
+
   useEffect(() => {
-    const saved = localStorage.getItem("huntai-theme") as Theme | null;
-    const initial = saved || "dark";
-    setThemeState(initial);
-    const r = resolveTheme(initial);
-    setResolved(r);
-    applyThemeClass(r);
-  }, []);
+    applyThemeClass(resolved);
+  }, [resolved]);
 
   // Listen for system theme changes
   useEffect(() => {

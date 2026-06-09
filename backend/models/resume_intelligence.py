@@ -14,6 +14,7 @@ class ResumeAnalysisRequest(BaseModel):
 
     resume_id: str = Field(..., min_length=1, max_length=128)
     resume_version: str | None = Field(default=None, max_length=128)
+    target_role: str | None = Field(default=None, max_length=255)
     content: str = Field(..., min_length=1, max_length=30000)
 
 
@@ -48,6 +49,75 @@ class ResumeFingerprint(BaseModel):
     features: ResumeFeatures
     created_at: datetime
     updated_at: datetime
+
+
+class ResumeSemanticProfile(BaseModel):
+    """Human-readable semantic extraction from one resume body."""
+
+    skills: list[str] = Field(default_factory=list)
+    technologies: list[str] = Field(default_factory=list)
+    quantified_impact: int = Field(ge=0)
+    project_complexity: float = Field(ge=0, le=1)
+    leadership_signals: list[str] = Field(default_factory=list)
+    domain_specialization: dict[str, float] = Field(default_factory=dict)
+    achievement_density: float = Field(ge=0, le=1)
+
+
+class ATSBreakdown(BaseModel):
+    """Explainable ATS scoring components."""
+
+    keyword_relevance: float = Field(ge=0, le=1)
+    formatting_quality: float = Field(ge=0, le=1)
+    structure_quality: float = Field(ge=0, le=1)
+    readability: float = Field(ge=0, le=1)
+    quantified_metrics: float = Field(ge=0, le=1)
+    role_alignment: float = Field(ge=0, le=1)
+    semantic_similarity: float = Field(ge=0, le=1)
+    final_score: float = Field(ge=0, le=100)
+
+
+class ResumeWeakness(BaseModel):
+    """Actionable resume weakness with expected ATS impact."""
+
+    weakness_id: str
+    category: str
+    severity: str
+    explanation: str
+    optimization_suggestion: str
+    expected_ats_impact: float
+
+
+class ResumeOptimizationPrediction(BaseModel):
+    """Confidence-aware prediction for the current resume pattern."""
+
+    interview_probability: float = Field(ge=0, le=1)
+    ats_probability: float = Field(ge=0, le=1)
+    rejection_likelihood: float = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
+    uncertainty: float = Field(ge=0, le=1)
+    evidence: list[str] = Field(default_factory=list)
+
+
+class ResumeIntelligenceReport(BaseModel):
+    """Full deterministic resume intelligence output."""
+
+    fingerprint: ResumeFingerprint
+    semantic_profile: ResumeSemanticProfile
+    ats: ATSBreakdown
+    weaknesses: list[ResumeWeakness] = Field(default_factory=list)
+    optimization_prediction: ResumeOptimizationPrediction
+    generated_at: datetime
+
+
+class ResumeVersionComparison(BaseModel):
+    """Comparison between two stored resume versions."""
+
+    left_resume_id: str
+    right_resume_id: str
+    ats_delta: float
+    feature_deltas: dict[str, float] = Field(default_factory=dict)
+    stronger_version: str | None = None
+    explanation: str
 
 
 class FeatureCorrelation(BaseModel):

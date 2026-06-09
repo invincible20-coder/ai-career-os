@@ -1,30 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { motion, AnimatePresence } from "framer-motion";
-import { FlaskConical, Target, BrainCircuit, Activity } from "lucide-react";
+import { Target, BrainCircuit, Activity } from "lucide-react";
 import { ResumeUploadZone } from "@/components/resume-lab/ResumeUploadZone";
 import { LiveAIActivityFeed } from "@/components/resume-lab/LiveAIActivityFeed";
 import { ATSScoreRing } from "@/components/resume-lab/ATSScoreRing";
 import { ResumeWeaknessAnalyzer } from "@/components/resume-lab/ResumeWeaknessAnalyzer";
 import { GlassCard } from "@/components/glass/GlassCard";
+import type { ResumeAnalysisResult } from "@/components/resume-lab/LiveAIActivityFeed";
 
 // Using a mock userId for demonstration, in reality this comes from next-auth useSession
 const MOCK_USER_ID = "demo-user-123"; 
 
 export default function ResumeLabPage() {
   const [analysisState, setAnalysisState] = useState<"idle" | "analyzing" | "complete">("idle");
-  const [analysisData, setAnalysisData] = useState<any>(null);
+  const [analysisData, setAnalysisData] = useState<ResumeAnalysisResult | null>(null);
 
-  const handleUploadStart = (userId: string, fileName: string) => {
+  const handleUploadStart = useCallback(() => {
     setAnalysisState("analyzing");
-  };
+  }, []);
 
-  const handleAnalysisComplete = (data: any) => {
+  const handleAnalysisComplete = useCallback((data: ResumeAnalysisResult) => {
     setAnalysisData(data);
     setAnalysisState("complete");
-  };
+  }, []);
+
+  const displayWeaknesses = analysisData?.report.weaknesses.map((weakness) => ({
+    id: weakness.weakness_id,
+    category: weakness.category,
+    severity: normalizeSeverity(weakness.severity),
+    description: weakness.explanation,
+    recommendation: weakness.optimization_suggestion,
+    expected_improvement: `+${weakness.expected_ats_impact.toFixed(1)} ATS`,
+    confidence: Math.min(1, Math.max(0.25, weakness.expected_ats_impact / 10)),
+  })) ?? [];
 
   return (
     <AppShell title="Resume Lab" showContext={false}>
@@ -105,24 +116,24 @@ export default function ResumeLabPage() {
                       <Activity className="h-4 w-4 text-indigo-400" /> System Evaluation
                     </h3>
                   </div>
-                  <ATSScoreRing 
-                    score={analysisData.features.ats_score} 
-                    confidence={analysisData.confidence} 
-                    trend="up" 
+                  <ATSScoreRing
+                    score={analysisData.report.fingerprint.features.ats_score}
+                    confidence={analysisData.report.optimization_prediction.confidence}
+                    trend="up"
                   />
                   <div className="px-6 pb-6 pt-0">
                     <div className="space-y-3">
-                      <MetricBar label="Keyword Density" value={analysisData.features.keyword_density * 100} />
-                      <MetricBar label="Readability" value={analysisData.features.readability_score * 100} />
-                      <MetricBar label="Action Verbs" value={analysisData.features.action_verb_usage * 100} />
-                      <MetricBar label="Tech Depth" value={analysisData.features.technical_depth * 100} />
+                      <MetricBar label="Keyword Density" value={analysisData.report.fingerprint.features.keyword_density * 100} />
+                      <MetricBar label="Readability" value={analysisData.report.fingerprint.features.readability_score * 100} />
+                      <MetricBar label="Action Verbs" value={analysisData.report.fingerprint.features.action_verb_usage * 100} />
+                      <MetricBar label="Tech Depth" value={analysisData.report.fingerprint.features.technical_depth * 100} />
                     </div>
                   </div>
                 </GlassCard>
               </div>
 
               <div className="lg:col-span-2">
-                <ResumeWeaknessAnalyzer weaknesses={analysisData.weaknesses} />
+                <ResumeWeaknessAnalyzer weaknesses={displayWeaknesses} />
                 
                 <div className="mt-6 flex justify-end">
                   <button 
@@ -158,4 +169,11 @@ function MetricBar({ label, value }: { label: string, value: number }) {
       </div>
     </div>
   );
+}
+
+function normalizeSeverity(severity: string): "high" | "medium" | "low" {
+  if (severity === "high" || severity === "medium" || severity === "low") {
+    return severity;
+  }
+  return "medium";
 }

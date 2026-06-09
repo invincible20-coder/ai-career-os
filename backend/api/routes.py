@@ -5,6 +5,7 @@ FastAPI routes.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 
 from backend.models.abc import BehaviorEventCreate, OutcomeCreate, RankJobsRequest
 from backend.models.career import UserProfile
@@ -32,6 +33,24 @@ async def health_check(request: Request) -> ResponseEnvelope:
     settings = request.app.state.settings
     payload = HealthPayload(status="ok", version=settings.app_version)
     return ResponseEnvelope(success=True, data=payload.model_dump(mode="json"), errors=[])
+
+
+@router.get("/metrics", response_model=ResponseEnvelope, tags=["system"])
+async def metrics_snapshot(request: Request) -> ResponseEnvelope:
+    return ResponseEnvelope(success=True, data=request.app.state.metrics.snapshot(), errors=[])
+
+
+@router.get("/events/stream/{channel}", tags=["streaming"])
+async def stream_events(request: Request, channel: str) -> StreamingResponse:
+    return StreamingResponse(
+        request.app.state.event_bus.subscribe(channel),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.post("/hunts", response_model=ResponseEnvelope, tags=["hunts"])
@@ -271,6 +290,20 @@ async def analyze_resume(
     return ResponseEnvelope(success=True, data=fingerprint.model_dump(mode="json"), errors=[])
 
 
+@router.post("/resume-intelligence/report", response_model=ResponseEnvelope, tags=["resume"])
+async def analyze_resume_report(
+    request: Request,
+    payload: ResumeAnalysisRequest,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    report = await service.analyze_resume_report(
+        user_id=_user_key(request, user_id),
+        payload=payload,
+    )
+    return ResponseEnvelope(success=True, data=report.model_dump(mode="json"), errors=[])
+
+
 @router.get("/resume-intelligence/correlations", response_model=ResponseEnvelope, tags=["resume"])
 async def get_resume_correlations(
     request: Request,
@@ -299,6 +332,30 @@ async def get_resume_effectiveness(
     return ResponseEnvelope(
         success=True,
         data=effectiveness.model_dump(mode="json") if effectiveness else None,
+        errors=[],
+    )
+
+
+@router.get(
+    "/resume-intelligence/compare",
+    response_model=ResponseEnvelope,
+    tags=["resume"],
+)
+async def compare_resume_versions(
+    request: Request,
+    left_resume_id: str = Query(...),
+    right_resume_id: str = Query(...),
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    comparison = await service.compare_resume_versions(
+        user_id=_user_key(request, user_id),
+        left_resume_id=left_resume_id,
+        right_resume_id=right_resume_id,
+    )
+    return ResponseEnvelope(
+        success=True,
+        data=comparison.model_dump(mode="json") if comparison else None,
         errors=[],
     )
 

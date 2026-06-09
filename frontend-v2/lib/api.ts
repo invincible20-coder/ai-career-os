@@ -1,4 +1,20 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
+function resolveApiBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
+  if (!raw) return "/api/v1";
+  if (raw.endsWith("/api/v1")) return raw;
+  if (raw.endsWith("/api")) return `${raw}/v1`;
+  return `${raw}/api/v1`;
+}
+
+export function getBackendBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
+  if (!raw || raw.startsWith("/")) return "http://localhost:8000";
+  if (raw.endsWith("/api/v1")) return raw.slice(0, -"/api/v1".length);
+  if (raw.endsWith("/api")) return raw.slice(0, -"/api".length);
+  return raw;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 function normalizeErrors(payload: Record<string, unknown> | null): string[] {
   if (!payload) return [];
@@ -89,4 +105,35 @@ export function getHuntApplications(huntId: string) {
 
 export function getAnalytics() {
   return request("/analytics");
+}
+
+export function recordIntent(payload: { message: string; session_id: string }, userId: string) {
+  return request(`/intelligence/intent?user_id=${encodeURIComponent(userId)}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getCareerDiscovery(
+  payload: { skills?: string[]; interests?: string[] },
+  userId: string
+) {
+  return request(`/intelligence/career-discovery?user_id=${encodeURIComponent(userId)}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getBehaviorProfile(userId?: string) {
+  const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
+  return request(`/behavior-profile${qs}`);
+}
+
+export function getStrategy(userId?: string) {
+  const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
+  return request(`/strategy${qs}`);
+}
+
+export function getIntelligenceProfile(userId: string) {
+  return request(`/intelligence/profile?user_id=${encodeURIComponent(userId)}`);
 }

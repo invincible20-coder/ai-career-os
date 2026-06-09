@@ -3,5 +3,10 @@
   "python.analysis.extraPaths": [
     "${workspaceFolder}/backend"
   ],
-  "css.lint.unknownAtRules": "ignore"
+  "css.lint.unknownAtRules": "ignore",
+  "pyrefly.pythonInterpreter": "${workspaceFolder}/venv/bin/python",
+  "pyrefly.searchPath": [
+    "${workspaceFolder}",
+    "${workspaceFolder}/backend"
+  ]
 }

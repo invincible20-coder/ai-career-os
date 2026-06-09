@@ -1,0 +1,156 @@
+Project Name: HuntAI (Autonomous Job Hunt AI Agent)
+
+Overview:
+This project is an AI-powered autonomous job hunting agent designed as a premium SaaS platform, often referred to as "Career OS" or "HuntAI OS". It automates the end-to-end job search process using an agentic loop (Goal -> Plan -> Act -> Observe -> Repeat) to find roles, tailor resumes and cover letters, prepare applications, and track their statuses. 
+
+Core Architecture:
+The project is divided into two primary directories: frontend-v2 and backend.
+
+1. frontend-v2/
+A modern Next.js based frontend built as an intelligent "Career Operating System". 
+- Liquid Glass Interface: A responsive 3-column app shell featuring a premium design.
+- Command Center: Conversational input system for starting and managing autonomous hunts.
+- Real-time Observability Dashboard: Data-bound interfaces offering live visibility into the AI agent's memory, planning, and step-by-step execution lifecycle.
+- Agent Status Visualization: Provides a unified design system with immediate actionable feedback on the agent's progress.
+
+2. backend/
+A production-grade FastAPI backend that drives the agentic loop. Below is a detailed breakdown of every file and component within the backend directory.
+
+--- Detailed Backend Architecture and File Summary ---
+
+1. Root Backend Files
+- backend/main.py: The main entry point for the FastAPI application. It initializes the application factory, wires up the core agent suite, connects the database on startup, registers all the HTTP routes, and handles the uvicorn web server lifecycle.
+- backend/__init__.py: Marks the backend directory as a Python package.
+
+2. API Layer (backend/api/)
+This layer handles the HTTP request/response lifecycle.
+- backend/api/routes.py: Contains all the FastAPI route definitions (endpoints like `/hunts`, `/recommend-career`, `/analytics`). Maps incoming HTTP requests to their respective service layer functions.
+- backend/api/dependencies.py: Defines FastAPI dependency injections, primarily responsible for providing database sessions and wiring up the service classes for each request.
+- backend/api/schemas.py: Defines Pydantic models used to validate incoming request bodies and format outbound JSON response envelopes (e.g., `HuntRequest`, `ResponseEnvelope`).
+- backend/api/errors.py: Defines custom JSON exception handlers to ensure all errors return a standardized `ErrorDetail` format instead of default stack traces.
+- backend/api/auth.py: Manages the authentication endpoints such as login, registration, and token refresh, alongside handling secure HTTP-only cookies.
+- backend/api/resume.py: Handles file upload endpoints and streaming events specifically related to resume parsing and analysis.
+- backend/api/__init__.py: Marks the directory as a Python package.
+
+3. Agent Layer (backend/agents/)
+These files contain the AI agents that power the job hunt orchestration loop.
+- backend/agents/career_agent.py: Driven by an LLM to analyze user profiles and provide career recommendations when users have vague goals.
+- backend/agents/planner.py: Generates a structured 4-step execution plan (Search -> Apply -> Track) using an LLM.
+- backend/agents/job_finder.py: Orchestrates job scraping and parsing to find relevant job listings.
+- backend/agents/resume_agent.py: An LLM-powered agent that tailors resumes to specific job listings.
+- backend/agents/cover_letter_agent.py: Generates custom cover letters targeted at specific roles.
+- backend/agents/apply_agent.py: Responsible for assembling the final job application payload from resumes and cover letters.
+- backend/agents/tracker_agent.py: Creates tracking entries to project the ongoing status of applications.
+- backend/agents/__init__.py: Bundles all the agents into a single `AgentSuite` dataclass.
+
+4. Core Configuration & Utilities (backend/core/)
+- backend/core/config.py: Manages application configuration and environment variables using Pydantic `Settings`.
+- backend/core/llm.py: A wrapper around the OpenAI client that enforces deterministic, JSON-compatible LLM outputs.
+- backend/core/logger.py: Configures structured JSON logging across the application, tracking hunt IDs, step names, and latencies.
+- backend/core/__init__.py: Marks the directory as a Python package.
+
+5. Domain Models (backend/models/)
+Pydantic schemas and dataclasses representing the core business logic.
+- backend/models/application.py: Models for job applications, resumes, and tracker entries.
+- backend/models/hunt.py: Defines the lifecycle state, steps, and results for a job hunt.
+- backend/models/job.py: Data models representing scraped job listings.
+- backend/models/plan.py: Defines the steps and structure of an execution plan.
+- backend/models/behavior.py: Models for behavior analytics, application tracking, and strategy profiles.
+- backend/models/abc.py: Contains models for the ABC-Driven Adaptive Engine (Antecedents, Behaviors, Consequences).
+- backend/models/career.py: Data structures for user profiles and career recommendations.
+- backend/models/intelligence.py: Models for conversational intent and career discovery.
+- backend/models/resume_intelligence.py: Data models for deterministic resume fingerprinting and outcome predictions.
+- backend/models/errors.py: Defines the structured `ErrorDetail` model used for surfacing issues.
+- backend/models/auth.py: Schemas for authentication requests and token payloads.
+- backend/models/__init__.py: Marks the directory as a Python package.
+
+6. Database Storage & ORM (backend/storage/)
+- backend/storage/database.py: Manages the async SQLAlchemy engine and session factory to connect to PostgreSQL/SQLite.
+- backend/storage/records.py: Defines all the SQLAlchemy ORM table structures (e.g., `HuntRecord`, `JobRecord`, `ApplicationRecord`).
+- backend/storage/auth_records.py: SQL tables specific to user accounts, linked accounts, and session data.
+- backend/storage/repository.py: The data access layer. Implements `HuntRepository` to abstract away SQL queries and manage hunt persistence.
+- backend/storage/__init__.py: Marks the directory as a Python package.
+
+7. Service Layer (backend/services/)
+Contains all the business logic, sitting between the API routes and the storage/agent layers.
+- backend/services/hunt_service.py: The main service that API endpoints call to start and manage hunts.
+- backend/services/auth_service.py: Handles password hashing, verification, and JWT creation/validation.
+- backend/services/behavior_service.py: Classifies user application behaviors (e.g., mass applier, networker) based on metrics.
+- backend/services/strategy_service.py: Uses behavior classification to dynamically adjust job selection strategies.
+- backend/services/abc_service.py: Runs the Adaptive Recommendation Engine to re-rank jobs based on user outcomes.
+- backend/services/analytics_service.py: Compiles performance reports from tracked applications.
+- backend/services/career_discovery_service.py: Discovers plausible career paths based on user history and signals.
+- backend/services/confidence_service.py: Scores how reliable recommendations are before exploiting them.
+- backend/services/intent_service.py: Extracts conversational intent over time from user interactions.
+- backend/services/intelligence_service.py: Coordinates the intent, discovery, and confidence engines.
+- backend/services/resume_correlation_service.py: Links resume fingerprints to success outcomes.
+- backend/services/predictive_career_service.py: Models long-term career trajectories using user vectors.
+- backend/services/plan_validator.py: Ensures that plans generated by the Planner Agent meet strict validation rules.
+- backend/services/resume_parser.py: Parses resumes using LLMs or extraction tools.
+- backend/services/retry.py: Provides backoff and retry logic for transient agent failures.
+- backend/services/exceptions.py: Custom domain exceptions that map to specific HTTP statuses.
+- backend/services/event_bus.py: An internal pub/sub mechanism for broadcasting events.
+- backend/services/tracking_service.py: Orchestrates behavior tracking and persistence.
+- backend/services/__init__.py: Marks the directory as a Python package.
+
+8. Orchestrator (backend/orchestrator/)
+- backend/orchestrator/runner.py: Contains `HuntOrchestrator`, the heart of the agentic loop. It executes plans sequentially, handles retries, enforces stop-on-failure guarantees, and delegates work to the respective agents.
+- backend/orchestrator/__init__.py: Marks the directory as a Python package.
+
+9. Tools & Integrations (backend/tools/)
+- backend/tools/scraper.py: Asynchronously scrapes job platforms (e.g., RemoteOK) for job listings.
+- backend/tools/parser.py: Cleans and parses raw scraped HTML/JSON payloads into standardized `Job` models.
+- backend/tools/__init__.py: Marks the directory as a Python package.
+
+10. Database File
+- job_hunt_agent.db (Root Directory): This is the primary SQLite database used by the backend to persist all data (hunts, applications, behaviors, auth). While it resides in the project root directory, its schema and read/write operations are exclusively managed by the `backend/storage/` modules.
+
+
+--- Detailed Frontend (frontend-v2) Architecture and File Summary ---
+
+1. Root Configuration Files
+- frontend-v2/package.json: Defines project dependencies, scripts, and metadata for the Next.js application.
+- frontend-v2/next.config.ts: Configuration for the Next.js build process, routing, and environment features.
+- frontend-v2/tsconfig.json: TypeScript compiler configuration.
+- frontend-v2/components.json: Configuration for shadcn/ui components.
+- frontend-v2/postcss.config.mjs & frontend-v2/eslint.config.mjs: Configuration for PostCSS (Tailwind) and ESLint.
+- frontend-v2/README.md & AGENTS.md & CLAUDE.md: Project documentation and agent guidelines.
+
+2. Next.js App Router (frontend-v2/app/)
+This directory defines the routing and pages of the application.
+- frontend-v2/app/layout.tsx: The root layout component that wraps every page. It initializes the `ThemeProvider` and the main `AppShell` (Sidebar, TopBar).
+- frontend-v2/app/page.tsx: The main dashboard/landing page of the application where users initiate hunts.
+- frontend-v2/app/globals.css: Global CSS styles, including Tailwind directives and custom CSS variables for the "Liquid Glass" theme.
+- frontend-v2/app/login/page.tsx: The authentication page for user login.
+- frontend-v2/app/api/auth/[...nextauth]/route.ts: API route handling NextAuth.js or custom authentication integrations.
+- frontend-v2/app/workspace/page.tsx: Page for managing the active workspace and viewing hunt progress.
+- frontend-v2/app/resume-lab/page.tsx: The dedicated Resume Lab page where users can upload resumes and view real-time ATS analysis.
+- frontend-v2/app/jobs/page.tsx: Page to view job recommendations and saved jobs.
+- frontend-v2/app/applications/page.tsx: Page to track the status of submitted applications.
+- frontend-v2/app/analytics/page.tsx: Dashboard for viewing application performance metrics and success rates.
+- frontend-v2/app/strategy/page.tsx: Page displaying the active adaptive AI strategy based on the user's behavior.
+- frontend-v2/app/chat/page.tsx: Interface for the conversational intent engine.
+- frontend-v2/app/profile/page.tsx: User profile management and settings.
+- frontend-v2/app/settings/page.tsx: Application settings and configuration.
+
+3. React Components (frontend-v2/components/)
+Modular React components organized by feature and design pattern.
+- UI Components (components/ui/): Standard atomic UI elements (button.tsx, card.tsx, input.tsx, tabs.tsx, progress.tsx, tooltip.tsx, badge.tsx, separator.tsx, select.tsx, textarea.tsx).
+- Layout (components/layout/): Structural components like `AppShell.tsx`, `Sidebar.tsx`, `TopBar.tsx`, and `ContextPanel.tsx` that build the 3-column application layout.
+- Glass (components/glass/): Premium "Liquid Glass" stylized components (`GlassCard.tsx`, `GlassPanel.tsx`, `GlassInput.tsx`) that define the application's unique visual identity.
+- Dashboard (components/dashboard/): Components for the main view, including `HeroInput.tsx` for starting hunts, `ActivityStream.tsx` for real-time logs, `PlanVisualization.tsx` to show the agent's plan, `MetricsBar.tsx`, and `QuickActions.tsx`.
+- Command (components/command/): Components for the conversational command center (`CommandInput.tsx`), autocomplete suggestions (`SuggestionChips.tsx`), and confidence signals (`SignalMeter.tsx`).
+- AI Visualization (components/ai/): Real-time observability components like `AgentActivity.tsx` (shows what the agent is doing), `LearningTimeline.tsx`, and `PersonaDetector.tsx`.
+- Resume Lab (components/resume-lab/): Components for the resume feature, such as `ResumeUploadZone.tsx`, `ATSScoreRing.tsx` (visualizes ATS scores), `ResumeWeaknessAnalyzer.tsx`, and `LiveAIActivityFeed.tsx`.
+- Career (components/career/): `RecommendationPanel.tsx` for displaying AI-driven career path suggestions.
+- Tracking (components/tracking/): `TrackerTable.tsx` for displaying application statuses in a data grid.
+- Shared/Content (components/shared/, components/content/): Reusable elements like `ErrorPanel.tsx`, `AnimatedCounter.tsx`, `SkeletonCard.tsx`, `EmptyState.tsx`, and `ContentViewer.tsx`.
+- Theme (components/theme/): `ThemeProvider.tsx` handles dark/light mode and custom theme contexts.
+
+4. State Management and Utilities (frontend-v2/lib/)
+- frontend-v2/lib/store.ts: The primary Zustand store managing the global state (active hunts, jobs, application progress).
+- frontend-v2/lib/chat-store.ts: Zustand store managing conversational state and intent context.
+- frontend-v2/lib/store/authStore.ts: Zustand store handling authentication state and user sessions.
+- frontend-v2/lib/api.ts: The Axios or Fetch API client used to communicate with the FastAPI backend, handling request interceptors and token management.
+- frontend-v2/lib/types.ts: TypeScript interface definitions mirroring the backend Pydantic models (e.g., `HuntResult`, `Job`, `ExecutionPlan`).
+- frontend-v2/lib/utils.ts: General utility functions, including the popular `cn` (clsx + tailwind-merge) utility for conditional classnames.

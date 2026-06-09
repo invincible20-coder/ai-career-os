@@ -12,6 +12,7 @@ from typing import Awaitable, Callable, TypeVar
 from backend.agents import AgentSuite
 from backend.core.config import Settings
 from backend.core.logger import get_logger
+from backend.models.abc import RankedJob
 from backend.models.application import Application
 from backend.models.behavior import StrategyAdjustment
 from backend.models.career import CareerRecommendation, UserProfile
@@ -29,6 +30,7 @@ from backend.services.exceptions import (
 from backend.services.plan_validator import validate_execution_plan
 from backend.services.retry import backoff_seconds, is_transient_error
 from backend.services.abc_service import ABCAdaptiveService
+from backend.services.event_bus import EventBus
 from backend.services.resume_correlation_service import ResumeCorrelationService
 from backend.services.strategy_service import StrategyService
 from backend.services.tracking_service import TrackingService
@@ -36,6 +38,9 @@ from backend.storage.repository import HuntRepository
 
 logger = get_logger(__name__)
 T = TypeVar("T")
+
+# Maximum wall-clock time for any single pipeline step (plan, search, apply, track)
+STEP_TIMEOUT_SECONDS = 90
 
 
 @dataclass(slots=True)
@@ -49,6 +54,7 @@ class HuntOrchestrator:
     tracking_service: TrackingService
     abc_service: ABCAdaptiveService
     resume_correlation_service: ResumeCorrelationService
+    event_bus: EventBus | None = None
 
     async def execute(
         self,
@@ -86,6 +92,16 @@ class HuntOrchestrator:
                 "goal_was_recommended": used_recommendation,
                 "behavior_type": strategy.behavior_type.value,
                 "session_id": session_id,
+            },
+        )
+        await self._publish(
+            session_id,
+            {
+                "type": "hunt_started",
+                "hunt_id": hunt_id,
+                "user_key": user_key,
+                "goal": resolved_goal,
+                "goal_was_recommended": used_recommendation,
             },
         )
 
@@ -169,6 +185,16 @@ class HuntOrchestrator:
                     "behavior_type": strategy.behavior_type.value,
                 },
             )
+            await self._publish(
+                session_id,
+                {
+                    "type": "hunt_completed",
+                    "hunt_id": hunt_id,
+                    "jobs": len(result.jobs_found),
+                    "applications": len(result.applications),
+                    "latency_ms": self._latency_ms(started_at),
+                },
+            )
             return result
 
         except ServiceError as exc:
@@ -180,6 +206,14 @@ class HuntOrchestrator:
                     "event": "hunt_failed",
                     "hunt_id": hunt_id,
                     "latency_ms": self._latency_ms(started_at),
+                    "errors": [error.model_dump(mode="json") for error in exc.errors],
+                },
+            )
+            await self._publish(
+                session_id,
+                {
+                    "type": "hunt_failed",
+                    "hunt_id": hunt_id,
                     "errors": [error.model_dump(mode="json") for error in exc.errors],
                 },
             )
@@ -199,6 +233,14 @@ class HuntOrchestrator:
                     "event": "hunt_failed_unhandled",
                     "hunt_id": hunt_id,
                     "latency_ms": self._latency_ms(started_at),
+                },
+            )
+            await self._publish(
+                session_id,
+                {
+                    "type": "hunt_failed",
+                    "hunt_id": hunt_id,
+                    "errors": [error.model_dump(mode="json")],
                 },
             )
             raise PipelineExecutionError("Hunt execution failed", errors=[error]) from exc
@@ -227,14 +269,36 @@ class HuntOrchestrator:
                     "attempt": attempt,
                 },
             )
+            await self._publish(
+                hunt_id,
+                {
+                    "type": "step_started",
+                    "hunt_id": hunt_id,
+                    "step": step_type.value,
+                    "attempt": attempt,
+                },
+            )
             try:
-                result = await operation()
+                result = await asyncio.wait_for(
+                    operation(),
+                    timeout=STEP_TIMEOUT_SECONDS,
+                )
                 latency_ms = self._latency_ms(started_at)
                 await persist(result, attempt, latency_ms)
                 logger.info(
                     "step_completed",
                     extra={
                         "event": "step_completed",
+                        "hunt_id": hunt_id,
+                        "step": step_type.value,
+                        "attempt": attempt,
+                        "latency_ms": latency_ms,
+                    },
+                )
+                await self._publish(
+                    hunt_id,
+                    {
+                        "type": "step_completed",
                         "hunt_id": hunt_id,
                         "step": step_type.value,
                         "attempt": attempt,
@@ -262,8 +326,111 @@ class HuntOrchestrator:
                         "errors": [error.model_dump(mode="json") for error in errors],
                     },
                 )
+                await self._publish(
+                    hunt_id,
+                    {
+                        "type": "step_failed",
+                        "hunt_id": hunt_id,
+                        "step": step_type.value,
+                        "attempt": attempt,
+                        "errors": [error.model_dump(mode="json") for error in errors],
+                    },
+                )
+                await self._publish(
+                    hunt_id,
+                    {
+                        "type": "FAILED",
+                        "hunt_id": hunt_id,
+                        "step": step_type.value,
+                        "message": f"{self._display_step(step_type)} failed",
+                        "errors": [error.model_dump(mode="json") for error in errors],
+                    },
+                )
                 exc.errors = errors
                 raise
+            except asyncio.TimeoutError as exc:
+                error = ErrorDetail(
+                    code="step_timeout",
+                    message=f"{self._display_step(step_type)} timed out",
+                    hunt_id=hunt_id,
+                    step=step_type.value,
+                    retryable=True,
+                    details={
+                        "timeout_seconds": STEP_TIMEOUT_SECONDS,
+                        "attempts": attempt,
+                    },
+                )
+                if attempt < self.settings.step_retry_attempts:
+                    await self.repository.mark_step_retryable_failure(
+                        hunt_id,
+                        step_type,
+                        attempt=attempt,
+                        errors=[error],
+                        latency_ms=self._latency_ms(started_at),
+                    )
+                    delay_seconds = backoff_seconds(
+                        attempt,
+                        base_delay=self.settings.step_retry_base_delay_seconds,
+                        max_delay=self.settings.step_retry_max_delay_seconds,
+                    )
+                    logger.warning(
+                        "step_timeout_retrying",
+                        extra={
+                            "event": "step_timeout_retrying",
+                            "hunt_id": hunt_id,
+                            "step": step_type.value,
+                            "attempt": attempt,
+                            "latency_ms": self._latency_ms(started_at),
+                            "retry_in_seconds": delay_seconds,
+                            "timeout_seconds": STEP_TIMEOUT_SECONDS,
+                        },
+                    )
+                    await self._publish(
+                        hunt_id,
+                        {
+                            "type": "TIMEOUT",
+                            "hunt_id": hunt_id,
+                            "step": step_type.value,
+                            "message": f"{self._display_step(step_type)} timed out",
+                            "retry_in_seconds": delay_seconds,
+                            "errors": [error.model_dump(mode="json")],
+                        },
+                    )
+                    await asyncio.sleep(delay_seconds)
+                    continue
+
+                await self.repository.mark_step_failed(
+                    hunt_id,
+                    step_type,
+                    [error],
+                    attempt=attempt,
+                    latency_ms=self._latency_ms(started_at),
+                )
+                logger.error(
+                    "step_timeout",
+                    extra={
+                        "event": "step_timeout",
+                        "hunt_id": hunt_id,
+                        "step": step_type.value,
+                        "attempt": attempt,
+                        "latency_ms": self._latency_ms(started_at),
+                        "errors": [error.model_dump(mode="json")],
+                    },
+                )
+                await self._publish(
+                    hunt_id,
+                    {
+                        "type": "TIMEOUT",
+                        "hunt_id": hunt_id,
+                        "step": step_type.value,
+                        "message": f"{self._display_step(step_type)} timed out",
+                        "errors": [error.model_dump(mode="json")],
+                    },
+                )
+                raise StepExecutionError(
+                    f"Step '{step_type.value}' timed out",
+                    errors=[error],
+                ) from exc
             except ServiceError as exc:
                 errors = self._attach_hunt_id(exc.errors, hunt_id, step_type.value)
                 exc.errors = errors
@@ -292,6 +459,17 @@ class HuntOrchestrator:
                             "errors": [error.model_dump(mode="json") for error in errors],
                         },
                     )
+                    await self._publish(
+                        hunt_id,
+                        {
+                            "type": "step_retrying",
+                            "hunt_id": hunt_id,
+                            "step": step_type.value,
+                            "attempt": attempt,
+                            "retry_in_seconds": delay_seconds,
+                            "errors": [error.model_dump(mode="json") for error in errors],
+                        },
+                    )
                     await asyncio.sleep(delay_seconds)
                     continue
 
@@ -310,6 +488,26 @@ class HuntOrchestrator:
                         "step": step_type.value,
                         "attempt": attempt,
                         "latency_ms": self._latency_ms(started_at),
+                        "errors": [error.model_dump(mode="json") for error in errors],
+                    },
+                )
+                await self._publish(
+                    hunt_id,
+                    {
+                        "type": "step_failed",
+                        "hunt_id": hunt_id,
+                        "step": step_type.value,
+                        "attempt": attempt,
+                        "errors": [error.model_dump(mode="json") for error in errors],
+                    },
+                )
+                await self._publish(
+                    hunt_id,
+                    {
+                        "type": "FAILED",
+                        "hunt_id": hunt_id,
+                        "step": step_type.value,
+                        "message": f"{self._display_step(step_type)} failed",
                         "errors": [error.model_dump(mode="json") for error in errors],
                     },
                 )
@@ -349,6 +547,17 @@ class HuntOrchestrator:
                             "reason": str(exc),
                         },
                     )
+                    await self._publish(
+                        hunt_id,
+                        {
+                            "type": "step_retrying",
+                            "hunt_id": hunt_id,
+                            "step": step_type.value,
+                            "attempt": attempt,
+                            "retry_in_seconds": delay_seconds,
+                            "reason": str(exc),
+                        },
+                    )
                     await asyncio.sleep(delay_seconds)
                     continue
 
@@ -367,6 +576,26 @@ class HuntOrchestrator:
                         "step": step_type.value,
                         "attempt": attempt,
                         "latency_ms": self._latency_ms(started_at),
+                        "errors": [error.model_dump(mode="json")],
+                    },
+                )
+                await self._publish(
+                    hunt_id,
+                    {
+                        "type": "step_failed",
+                        "hunt_id": hunt_id,
+                        "step": step_type.value,
+                        "attempt": attempt,
+                        "errors": [error.model_dump(mode="json")],
+                    },
+                )
+                await self._publish(
+                    hunt_id,
+                    {
+                        "type": "FAILED",
+                        "hunt_id": hunt_id,
+                        "step": step_type.value,
+                        "message": f"{self._display_step(step_type)} failed",
                         "errors": [error.model_dump(mode="json")],
                     },
                 )
@@ -392,6 +621,15 @@ class HuntOrchestrator:
         session_id: str,
     ) -> list[Job]:
         search_step = self._get_step(plan, StepType.SEARCH)
+        logger.info(
+            "DISCOVERY_STARTED",
+            extra={
+                "event": "discovery_started",
+                "hunt_id": hunt_id,
+                "query": search_step.parameters.get("query", resolved_goal),
+                "user_key": user_key,
+            },
+        )
         search_result = await self.agents.job_finder.search(
             query=search_step.parameters.get("query", resolved_goal),
             location=search_step.parameters.get("location"),
@@ -399,6 +637,14 @@ class HuntOrchestrator:
                 search_step.parameters.get("max_results"),
                 strategy,
             ),
+        )
+        logger.info(
+            "DISCOVERY_SEARCH_COMPLETED",
+            extra={
+                "event": "discovery_search_completed",
+                "hunt_id": hunt_id,
+                "total_found": search_result.total_found,
+            },
         )
         jobs = self._validate_search_result(search_result, hunt_id)
         selected_jobs = self.strategy_service.select_jobs(
@@ -422,18 +668,66 @@ class HuntOrchestrator:
                     )
                 ],
             )
-        ranked_jobs = await self.abc_service.rank_jobs(
-            user_id=user_key,
-            hunt_id=hunt_id,
-            session_id=session_id,
-            goal=resolved_goal,
-            jobs=selected_jobs,
-            profile=profile,
-            filters={
-                "behavior_strategy": strategy.model_dump(mode="json"),
-                "role_similarity_required": strategy.role_similarity_required,
-                "min_fit_score": strategy.min_fit_score,
-                "max_applications": strategy.max_applications,
+        try:
+            ranked_jobs = await asyncio.wait_for(
+                self.abc_service.rank_jobs(
+                    user_id=user_key,
+                    hunt_id=hunt_id,
+                    session_id=session_id,
+                    goal=resolved_goal,
+                    jobs=selected_jobs,
+                    profile=profile,
+                    filters={
+                        "behavior_strategy": strategy.model_dump(mode="json"),
+                        "role_similarity_required": strategy.role_similarity_required,
+                        "min_fit_score": strategy.min_fit_score,
+                        "max_applications": strategy.max_applications,
+                    },
+                ),
+                timeout=30,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "RANKING_TIMEOUT",
+                extra={"event": "ranking_timeout", "hunt_id": hunt_id},
+            )
+            ranked_jobs = [
+                RankedJob(
+                    job=job,
+                    event_id="timeout-fallback",
+                    job_id=job.job_id,
+                    rank=idx,
+                    job_category="general",
+                    keyword_match=0.5,
+                    skill_match=0.5,
+                    education_match=0.5,
+                    experience_match=0.5,
+                    location_match=0.5,
+                    base_match_score=0.5,
+                    behavior_score=0.5,
+                    outcome_score=0.5,
+                    category_weight=0.5,
+                    confidence=0.0,
+                    confidence_percent=0.0,
+                    uncertainty_percent=100.0,
+                    evidence_strength=0.0,
+                    exploration_bonus=0.0,
+                    repetition_penalty=0.0,
+                    final_score=0.5,
+                    reason="Ranking timed out — showing unranked results",
+                    explanation="ABC ranking service did not complete in time.",
+                    signal_breakdown={},
+                    strategy_weights={},
+                    filters={},
+                )
+                for idx, job in enumerate(selected_jobs, start=1)
+            ]
+        logger.info(
+            "DISCOVERY_RANKING_COMPLETED",
+            extra={
+                "event": "discovery_ranking_completed",
+                "hunt_id": hunt_id,
+                "jobs_ranked": len(ranked_jobs),
             },
         )
         logger.info(
@@ -448,6 +742,7 @@ class HuntOrchestrator:
                 "abc_top_rank": ranked_jobs[0].model_dump(mode="json") if ranked_jobs else None,
             },
         )
+        logger.info("DISCOVERY_COMPLETED", extra={"event": "discovery_completed", "hunt_id": hunt_id})
         return [ranked.job for ranked in ranked_jobs]
 
     async def _prepare_applications(
@@ -461,15 +756,13 @@ class HuntOrchestrator:
 
         async def build_application(job: Job) -> Application:
             async with semaphore:
-                resume = await self.agents.resume_writer.generate(job)
-                cover_letter = await self.agents.cover_letter_writer.generate(job)
-                return await self.agents.application_builder.prepare(
-                    hunt_id,
-                    job,
-                    resume,
-                    cover_letter,
-                    resume_version=resume_version,
-                    is_referral=self.strategy_service.is_referral_candidate(job),
+                return await asyncio.wait_for(
+                    self._build_single_application(
+                        hunt_id,
+                        job,
+                        resume_version=resume_version,
+                    ),
+                    timeout=self.settings.request_timeout_seconds * 3,
                 )
 
         results = await asyncio.gather(
@@ -506,6 +799,43 @@ class HuntOrchestrator:
             raise StepExecutionError("Apply step failed", errors=errors)
 
         return applications
+
+    async def _build_single_application(
+        self,
+        hunt_id: str,
+        job: Job,
+        *,
+        resume_version: str,
+    ) -> Application:
+        resume = await asyncio.wait_for(
+            self.agents.resume_writer.generate(job),
+            timeout=self.settings.llm_timeout_seconds,
+        )
+        cover_letter = await asyncio.wait_for(
+            self.agents.cover_letter_writer.generate(job),
+            timeout=self.settings.llm_timeout_seconds,
+        )
+        return await asyncio.wait_for(
+            self.agents.application_builder.prepare(
+                hunt_id,
+                job,
+                resume,
+                cover_letter,
+                resume_version=resume_version,
+                is_referral=self.strategy_service.is_referral_candidate(job),
+            ),
+            timeout=self.settings.request_timeout_seconds,
+        )
+
+    @staticmethod
+    def _display_step(step_type: StepType) -> str:
+        labels = {
+            StepType.PLAN: "Planner Agent",
+            StepType.SEARCH: "Discovery Agent",
+            StepType.APPLY: "Application Agent",
+            StepType.TRACK: "Tracking Agent",
+        }
+        return labels.get(step_type, f"{step_type.value.title()} Agent")
 
     async def _resolve_goal(
         self,
@@ -613,6 +943,11 @@ class HuntOrchestrator:
     @staticmethod
     def _latency_ms(started_at: float) -> int:
         return round((perf_counter() - started_at) * 1000)
+
+    async def _publish(self, channel: str, payload: dict) -> None:
+        if self.event_bus is None:
+            return
+        await self.event_bus.publish(channel, payload)
 
     @staticmethod
     def _is_vague_goal(goal: str) -> bool:

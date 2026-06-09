@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { recordIntent } from "./api";
 
 export type MessageRole = "user" | "assistant" | "system";
 export type IntentType = "exploring" | "uncertain" | "focused" | "desperate" | "confident" | "burnout" | "technical";
@@ -33,11 +34,21 @@ interface ChatStore {
   messages: ChatMessage[];
   isStreaming: boolean;
   activeIntent: { type: IntentType; confidence: number; label: string } | null;
+  sessionId: string;
+  userId: string;
   addMessage: (msg: Omit<ChatMessage, "id" | "timestamp">) => void;
   updateLastAssistant: (content: string, done?: boolean) => void;
   setStreaming: (v: boolean) => void;
   setIntent: (intent: ChatStore["activeIntent"]) => void;
   simulateResponse: (userMessage: string) => void;
+}
+
+interface BackendIntent {
+  career_clarity?: number;
+  uncertainty?: number;
+  exploration_mode?: boolean;
+  urgency?: number;
+  category_preference?: string;
 }
 
 function uid() {
@@ -53,7 +64,8 @@ function detectIntent(text: string): { type: IntentType; confidence: number; lab
   return { type: "exploring", confidence: 55, label: "Career State: Exploring" };
 }
 
-function getResponse(msg: string) {
+// Local fallback when backend is unavailable
+function getFallbackResponse(msg: string) {
   const l = msg.toLowerCase();
   if (l.includes("backend") || l.includes("python")) {
     return {
@@ -83,7 +95,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     content: "Welcome to HuntAI. I'm your adaptive career intelligence system.\n\nUnlike a regular chatbot, I learn from every interaction.\n\n**Try telling me:**\n- What kind of work excites you\n- Where you feel stuck\n- What your ideal role looks like\n\nSpeak freely — confusion is data too.",
     timestamp: new Date().toISOString(), memory: ["Session initialized"],
   }],
-  isStreaming: false, activeIntent: null,
+  isStreaming: false,
+  activeIntent: null,
+  sessionId: `session-${uid()}`,
+  userId: "demo-user",
 
   addMessage(msg) {
     set((s) => ({ messages: [...s.messages, { ...msg, id: uid(), timestamp: new Date().toISOString() }] }));
@@ -104,13 +119,80 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     get().setIntent(intent);
     get().addMessage({ role: "user", content: userMessage, intent });
     set({ isStreaming: true });
-    const response = getResponse(userMessage);
-    get().addMessage({ role: "assistant", content: "", isStreaming: true, actions: response.actions, memory: response.memory, executionSteps: response.executionSteps });
-    let i = 0;
-    const interval = setInterval(() => {
-      i += Math.floor(Math.random() * 3) + 1;
-      if (i >= response.content.length) { get().updateLastAssistant(response.content, true); clearInterval(interval); }
-      else get().updateLastAssistant(response.content.slice(0, i));
-    }, 18);
+
+    // Try to send the message to the real backend intent service
+    const { sessionId, userId } = get();
+    recordIntent({ message: userMessage, session_id: sessionId }, userId)
+      .then((backendIntent) => {
+        // Backend returned real intent data — use it
+        if (backendIntent && typeof backendIntent === "object") {
+          const bi = backendIntent as BackendIntent;
+          const realIntent: ChatStore["activeIntent"] = {
+            type: (bi.exploration_mode ? "exploring" : "focused") as IntentType,
+            confidence: Math.round((bi.career_clarity ?? 0.5) * 100),
+            label: bi.exploration_mode
+              ? `Exploring (clarity: ${Math.round((bi.career_clarity ?? 0) * 100)}%)`
+              : `Focused (clarity: ${Math.round((bi.career_clarity ?? 0) * 100)}%)`,
+          };
+          get().setIntent(realIntent);
+
+          // Build a response from real backend signals
+          const clarityPct = Math.round((bi.career_clarity ?? 0) * 100);
+          const uncertaintyPct = Math.round((bi.uncertainty ?? 0) * 100);
+          const content = `I've processed your input through the adaptive intelligence engine.\n\n## Analysis from Backend\n\n**Career Clarity:** ${clarityPct}%\n**Uncertainty:** ${uncertaintyPct}%\n**Exploration Mode:** ${bi.exploration_mode ? "Active" : "Inactive"}\n**Urgency:** ${Math.round((bi.urgency ?? 0) * 100)}%\n\n${bi.category_preference ? `**Detected Preference:** ${bi.category_preference}` : ""}\n\n> This data feeds into the adaptive ranking engine — future job recommendations will reflect these signals.\n\nTell me more about what excites you or what you're looking for.`;
+
+          get().addMessage({
+            role: "assistant",
+            content: "",
+            isStreaming: true,
+            memory: [`Intent recorded: clarity ${clarityPct}%`, `Uncertainty: ${uncertaintyPct}%`],
+            executionSteps: [
+              { label: "Sent to backend intent engine", status: "done" },
+              { label: "Career signals updated", status: "done" },
+            ],
+            actions: [
+              { id: "1", label: "View Intelligence Profile", type: "view" },
+              { id: "2", label: "Start Job Hunt", type: "apply" },
+            ],
+          });
+
+          // Simulate streaming the response text
+          let i = 0;
+          const interval = setInterval(() => {
+            i += Math.floor(Math.random() * 3) + 1;
+            if (i >= content.length) {
+              get().updateLastAssistant(content, true);
+              clearInterval(interval);
+            } else {
+              get().updateLastAssistant(content.slice(0, i));
+            }
+          }, 18);
+        } else {
+          throw new Error("Empty backend response");
+        }
+      })
+      .catch(() => {
+        // Backend unavailable — fall back to local mock
+        console.warn("[Chat] Backend intent service unavailable, using local fallback");
+        const response = getFallbackResponse(userMessage);
+        get().addMessage({
+          role: "assistant",
+          content: "",
+          isStreaming: true,
+          actions: response.actions,
+          memory: [...(response.memory || []), "⚠ Backend offline — using local AI"],
+          executionSteps: response.executionSteps,
+        });
+        let i = 0;
+        const interval = setInterval(() => {
+          i += Math.floor(Math.random() * 3) + 1;
+          if (i >= response.content.length) {
+            get().updateLastAssistant(response.content, true);
+            clearInterval(interval);
+          } else {
+            get().updateLastAssistant(response.content.slice(0, i));
+          }
+        }, 18);
+      });
   },
 }));

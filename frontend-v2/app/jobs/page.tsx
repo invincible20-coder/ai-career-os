@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, SlidersHorizontal, Shield, ShieldCheck, ShieldAlert, MapPin, Globe, Bookmark, X as XIcon, ChevronDown, ChevronUp, Sparkles, TrendingUp, FileText, Zap, Star } from "lucide-react";
+import { Search, SlidersHorizontal, Shield, ShieldCheck, ShieldAlert, MapPin, Bookmark, ChevronDown, ChevronUp, Sparkles, TrendingUp, FileText, Zap, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AppShell } from "@/components/layout/AppShell";
 import { GlassCard } from "@/components/glass/GlassCard";
-import { GlassPanel } from "@/components/glass/GlassPanel";
 
 interface JobData {
   id: string; title: string; company: string; location: string; salary: string; remote: boolean;

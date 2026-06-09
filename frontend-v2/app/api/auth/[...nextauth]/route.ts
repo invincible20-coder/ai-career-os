@@ -3,7 +3,18 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import GitHubProvider from "next-auth/providers/github";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+function resolveBackendRoot(): string {
+  const raw = (
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "http://localhost:8000"
+  ).replace(/\/$/, "");
+  if (raw.endsWith("/api/v1")) return raw.slice(0, -"/api/v1".length);
+  if (raw.endsWith("/api")) return raw.slice(0, -"/api".length);
+  return raw;
+}
+
+const API_URL = resolveBackendRoot();
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -53,7 +64,7 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
       }
@@ -61,7 +72,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (token && session.user) {
-        (session.user as any).id = token.id;
+        (session.user as { id?: unknown }).id = token.id;
       }
       return session;
     }

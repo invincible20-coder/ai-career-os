@@ -30,6 +30,11 @@ class Job(BaseModel):
     recommendation_reason: str | None = None
     recommendation_event_id: str | None = None
     job_category: str | None = None
+    trust_score: float | None = Field(default=None, ge=0, le=1)
+    source_confidence: float | None = Field(default=None, ge=0, le=1)
+    legitimacy_probability: float | None = Field(default=None, ge=0, le=1)
+    scam_flags: list[str] = Field(default_factory=list)
+    duplicate_of: str | None = None
 
 
 class JobSearchResult(BaseModel):

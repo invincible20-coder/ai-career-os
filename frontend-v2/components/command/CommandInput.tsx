@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, ArrowRight, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { GlassInput } from "@/components/glass/GlassInput";
 import { cn } from "@/lib/utils";
 
@@ -55,7 +55,7 @@ export function CommandInput({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !disabled) {
+      if (e.key === "Enter" && !e.shiftKey && !disabled) {
         e.preventDefault();
         onSubmit();
       }
@@ -126,7 +126,7 @@ export function CommandInput({
           <span className="text-[10px] text-muted-foreground">
             No limits — share goals, confusion, or raw thoughts
           </span>
-          <span className="text-[10px] text-muted-foreground font-mono">⌘ + Enter</span>
+          <span className="text-[10px] text-muted-foreground font-mono">Enter to send · Shift+Enter for new line</span>
         </div>
       </div>
     </div>

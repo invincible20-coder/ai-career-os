@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Brain, ArrowRight } from "lucide-react";
+import { Brain } from "lucide-react";
 import { GlassCard } from "@/components/glass/GlassCard";
 
 interface TimelineEvent {

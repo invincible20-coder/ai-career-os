@@ -37,6 +37,7 @@ class Settings:
 
     cors_allowed_origins: tuple[str, ...] = ("http://localhost:3000",)
     cors_allow_credentials: bool = True
+    auth_cookie_secure: bool = False
 
     llm_provider: str = "mock"
     use_mock_llm: bool = True
@@ -57,6 +58,21 @@ class Settings:
     hunt_rate_limit_window_seconds: int = 60
     behavior_min_applications: int = 5
     behavior_analysis_window_days: int = 30
+    redis_url: str = "redis://localhost:6379/0"
+    redis_enabled: bool = False
+    background_worker_enabled: bool = True
+    security_headers_enabled: bool = True
+    metrics_enabled: bool = True
+    csrf_protection_enabled: bool = True
+    oauth_redirect_base_url: str = "http://localhost:8000/api/v1/auth/oauth"
+    oauth_enabled_providers: tuple[str, ...] = (
+        "google",
+        "github",
+        "linkedin",
+        "apple",
+        "microsoft",
+        "discord",
+    )
 
     def validate(self) -> None:
         if self.cors_allow_credentials and "*" in self.cors_allowed_origins:
@@ -97,6 +113,7 @@ def get_settings() -> Settings:
         ),
         cors_allow_credentials=os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower()
         == "true",
+        auth_cookie_secure=os.getenv("AUTH_COOKIE_SECURE", "false").lower() == "true",
         llm_provider=os.getenv("LLM_PROVIDER", "mock"),
         use_mock_llm=os.getenv("USE_MOCK_LLM", "true").lower() == "true",
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
@@ -122,6 +139,23 @@ def get_settings() -> Settings:
         behavior_min_applications=int(os.getenv("BEHAVIOR_MIN_APPLICATIONS", "5")),
         behavior_analysis_window_days=int(
             os.getenv("BEHAVIOR_ANALYSIS_WINDOW_DAYS", "30")
+        ),
+        redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+        redis_enabled=os.getenv("REDIS_ENABLED", "false").lower() == "true",
+        background_worker_enabled=os.getenv("BACKGROUND_WORKER_ENABLED", "true").lower()
+        == "true",
+        security_headers_enabled=os.getenv("SECURITY_HEADERS_ENABLED", "true").lower()
+        == "true",
+        metrics_enabled=os.getenv("METRICS_ENABLED", "true").lower() == "true",
+        csrf_protection_enabled=os.getenv("CSRF_PROTECTION_ENABLED", "true").lower()
+        == "true",
+        oauth_redirect_base_url=os.getenv(
+            "OAUTH_REDIRECT_BASE_URL",
+            "http://localhost:8000/api/v1/auth/oauth",
+        ),
+        oauth_enabled_providers=_split_csv_env(
+            "OAUTH_ENABLED_PROVIDERS",
+            "google,github,linkedin,apple,microsoft,discord",
         ),
     )
     settings.validate()

@@ -14,10 +14,16 @@ from statistics import fmean, pstdev
 from backend.models.abc import OutcomeType
 from backend.models.application import Application
 from backend.models.resume_intelligence import (
+    ATSBreakdown,
     FeatureCorrelation,
+    ResumeIntelligenceReport,
+    ResumeOptimizationPrediction,
     ResumeEffectivenessEstimate,
     ResumeFeatures,
     ResumeFingerprint,
+    ResumeSemanticProfile,
+    ResumeVersionComparison,
+    ResumeWeakness,
     ResumeCorrelationProfile,
 )
 from backend.storage.records import ApplicationRecord, BehaviorEventRecord, OutcomeRecord, utc_now
@@ -140,6 +146,68 @@ class ResumeCorrelationService:
         await self.refresh_profile(user_id)
         return fingerprint
 
+    async def analyze_resume_report(
+        self,
+        *,
+        user_id: str,
+        resume_id: str,
+        resume_version: str | None,
+        content: str,
+        target_role: str | None = None,
+    ) -> ResumeIntelligenceReport:
+        """Persist a resume version and return a full deterministic intelligence report."""
+
+        fingerprint = self.build_fingerprint(
+            user_id=user_id,
+            resume_id=resume_id,
+            resume_version=resume_version or resume_id,
+            content=content,
+        )
+        await self.repository.upsert_resume_fingerprint(fingerprint)
+        profile = await self.refresh_profile(user_id)
+        return self.build_report(
+            fingerprint=fingerprint,
+            content=content,
+            target_role=target_role,
+            profile=profile,
+        )
+
+    def build_report(
+        self,
+        *,
+        fingerprint: ResumeFingerprint,
+        content: str,
+        target_role: str | None,
+        profile: ResumeCorrelationProfile,
+    ) -> ResumeIntelligenceReport:
+        semantic_profile = self.extract_semantics(content, fingerprint.features)
+        ats = self.score_ats(
+            content=content,
+            features=fingerprint.features,
+            semantic_profile=semantic_profile,
+            target_role=target_role,
+        )
+        weaknesses = self.detect_weaknesses(
+            content=content,
+            features=fingerprint.features,
+            semantic_profile=semantic_profile,
+            ats=ats,
+            target_role=target_role,
+        )
+        prediction = self.predict_optimization(
+            fingerprint=fingerprint,
+            ats=ats,
+            profile=profile,
+        )
+        return ResumeIntelligenceReport(
+            fingerprint=fingerprint,
+            semantic_profile=semantic_profile,
+            ats=ats,
+            weaknesses=weaknesses,
+            optimization_prediction=prediction,
+            generated_at=utc_now(),
+        )
+
     def build_fingerprint(
         self,
         *,
@@ -239,6 +307,265 @@ class ResumeCorrelationService:
             data_keywords=data_keywords,
             technical_depth=round(technical_depth, 4),
             communication_indicators=round(communication_indicators, 4),
+        )
+
+    def extract_semantics(
+        self,
+        content: str,
+        features: ResumeFeatures,
+    ) -> ResumeSemanticProfile:
+        normalized = self._normalize(content)
+        skills = sorted(
+            {
+                keyword.title() if len(keyword) > 3 else keyword.upper()
+                for keyword in _TECHNICAL_KEYWORDS
+                if keyword in normalized
+            }
+        )
+        technologies = sorted(
+            {
+                keyword
+                for keyword in (
+                    _BACKEND_KEYWORDS
+                    | _FRONTEND_KEYWORDS
+                    | _DATA_KEYWORDS
+                    | {"docker", "kubernetes", "redis", "postgres", "aws", "terraform"}
+                )
+                if keyword in normalized
+            }
+        )
+        leadership = sorted(
+            {
+                term
+                for term in _COMMUNICATION_TERMS | {"owned", "coached", "managed", "architected"}
+                if term in normalized
+            }
+        )
+        domain_scores = {
+            "backend": min(1.0, features.backend_keywords / 8),
+            "frontend": min(1.0, features.frontend_keywords / 8),
+            "data": min(1.0, features.data_keywords / 8),
+            "platform": min(1.0, self._phrase_hits(normalized, {"docker", "kubernetes", "terraform", "redis"}) / 6),
+        }
+        bullet_count = max(
+            1,
+            len([line for line in content.splitlines() if line.strip().startswith(("-", "*", "•"))]),
+        )
+        return ResumeSemanticProfile(
+            skills=skills,
+            technologies=technologies,
+            quantified_impact=features.quantified_achievements,
+            project_complexity=features.project_complexity_score,
+            leadership_signals=leadership,
+            domain_specialization={key: round(value, 4) for key, value in domain_scores.items()},
+            achievement_density=round(min(1.0, features.quantified_achievements / bullet_count), 4),
+        )
+
+    def score_ats(
+        self,
+        *,
+        content: str,
+        features: ResumeFeatures,
+        semantic_profile: ResumeSemanticProfile,
+        target_role: str | None,
+    ) -> ATSBreakdown:
+        normalized = self._normalize(content)
+        sections = {"skills", "experience", "projects", "education"}
+        section_hits = sum(1 for section in sections if section in normalized)
+        structure_quality = min(1.0, section_hits / len(sections) + 0.10)
+        keyword_relevance = min(1.0, features.keyword_density * 1.25)
+        quantified_metrics = min(1.0, features.quantified_achievements / 6)
+        role_alignment = self._role_alignment(normalized, target_role)
+        strongest_domain = max(semantic_profile.domain_specialization.values() or [0.0])
+        semantic_similarity = round(role_alignment * 0.55 + strongest_domain * 0.45, 4)
+        final_score = round(
+            (
+                keyword_relevance * 0.22
+                + features.formatting_consistency * 0.14
+                + structure_quality * 0.16
+                + features.readability_score * 0.14
+                + quantified_metrics * 0.14
+                + role_alignment * 0.12
+                + semantic_similarity * 0.08
+            )
+            * 100,
+            2,
+        )
+        return ATSBreakdown(
+            keyword_relevance=round(keyword_relevance, 4),
+            formatting_quality=features.formatting_consistency,
+            structure_quality=round(structure_quality, 4),
+            readability=features.readability_score,
+            quantified_metrics=round(quantified_metrics, 4),
+            role_alignment=round(role_alignment, 4),
+            semantic_similarity=semantic_similarity,
+            final_score=final_score,
+        )
+
+    def detect_weaknesses(
+        self,
+        *,
+        content: str,
+        features: ResumeFeatures,
+        semantic_profile: ResumeSemanticProfile,
+        ats: ATSBreakdown,
+        target_role: str | None,
+    ) -> list[ResumeWeakness]:
+        weaknesses: list[ResumeWeakness] = []
+
+        def add(category: str, severity: str, explanation: str, suggestion: str, impact: float) -> None:
+            weaknesses.append(
+                ResumeWeakness(
+                    weakness_id=hashlib.sha256(f"{category}:{explanation}".encode("utf-8")).hexdigest()[:12],
+                    category=category,
+                    severity=severity,
+                    explanation=explanation,
+                    optimization_suggestion=suggestion,
+                    expected_ats_impact=round(impact, 2),
+                )
+            )
+
+        vague_bullets = [
+            line.strip()
+            for line in content.splitlines()
+            if re.search(r"\b(responsible for|worked on|helped|handled|various)\b", line.lower())
+        ]
+        if vague_bullets:
+            add(
+                "low_impact_language",
+                "high" if len(vague_bullets) >= 3 else "medium",
+                "Some bullets describe activity instead of measurable ownership or outcome.",
+                "Rewrite vague bullets with action verb, scope, metric, and business/technical result.",
+                6.0 + min(8.0, len(vague_bullets) * 2.0),
+            )
+        if features.quantified_achievements < 2:
+            add(
+                "lack_of_metrics",
+                "high",
+                "The resume has too few quantified achievements for strong ATS and recruiter signal.",
+                "Add numbers for latency, cost, scale, users, revenue, automation time saved, or accuracy gains.",
+                12.0,
+            )
+        if features.keyword_density < 0.28:
+            add(
+                "poor_role_targeting",
+                "medium",
+                "Technical keyword density is low for targeted job matching.",
+                "Mirror important role-specific terms from target job descriptions without keyword stuffing.",
+                7.5,
+            )
+        if features.project_complexity_score < 0.35:
+            add(
+                "weak_projects",
+                "medium",
+                "Projects do not yet show enough system complexity or engineering depth.",
+                "Mention architecture, scale, reliability, data flow, integrations, or performance constraints.",
+                6.5,
+            )
+        if features.formatting_consistency < 0.70 or ats.structure_quality < 0.65:
+            add(
+                "ats_incompatibility",
+                "medium",
+                "Structure or formatting may make parsing less reliable.",
+                "Use clear section headings, consistent bullets, simple formatting, and avoid dense paragraphs.",
+                8.0,
+            )
+        if semantic_profile.achievement_density < 0.35:
+            add(
+                "achievement_density",
+                "medium",
+                "A low share of bullets contain concrete achievements.",
+                "Turn responsibilities into outcome bullets and quantify at least every second bullet.",
+                5.5,
+            )
+        if target_role and ats.role_alignment < 0.45:
+            add(
+                "role_alignment",
+                "high",
+                f"The resume is not strongly aligned to the target role '{target_role}'.",
+                "Add a tailored summary, project ordering, and skills section for this role family.",
+                10.0,
+            )
+        return weaknesses
+
+    def predict_optimization(
+        self,
+        *,
+        fingerprint: ResumeFingerprint,
+        ats: ATSBreakdown,
+        profile: ResumeCorrelationProfile,
+    ) -> ResumeOptimizationPrediction:
+        estimate = profile.resume_effectiveness.get(fingerprint.fingerprint_id)
+        ats_probability = round(ats.final_score / 100, 4)
+        if estimate is None:
+            interview_probability = round(0.25 * 0.55 + ats_probability * 0.45, 4)
+            confidence = round(min(0.35, profile.total_linked_outcomes / 30), 4)
+            evidence = ["No outcome history for this exact resume; structural ATS signals dominate."]
+        else:
+            interview_probability = round(
+                estimate.interview_rate * 0.50
+                + estimate.response_speed_score * 0.15
+                + ats_probability * 0.25
+                + estimate.consistency_score * 0.10,
+                4,
+            )
+            confidence = estimate.confidence
+            evidence = [
+                f"{estimate.data_volume} linked outcomes for this resume pattern.",
+                estimate.reason,
+            ]
+        rejection_likelihood = round(max(0.0, min(1.0, 1 - interview_probability * 0.85 - ats_probability * 0.15)), 4)
+        return ResumeOptimizationPrediction(
+            interview_probability=interview_probability,
+            ats_probability=ats_probability,
+            rejection_likelihood=rejection_likelihood,
+            confidence=confidence,
+            uncertainty=round(1 - confidence, 4),
+            evidence=evidence,
+        )
+
+    async def compare_resume_versions(
+        self,
+        *,
+        user_id: str,
+        left_resume_id: str,
+        right_resume_id: str,
+    ) -> ResumeVersionComparison | None:
+        left = await self.repository.get_resume_fingerprint(user_id, left_resume_id)
+        right = await self.repository.get_resume_fingerprint(user_id, right_resume_id)
+        if left is None or right is None:
+            return None
+        left_features = left.features
+        right_features = right.features
+        deltas = {
+            name: round(
+                self._normalised_feature_value(right_features, name)
+                - self._normalised_feature_value(left_features, name),
+                4,
+            )
+            for name in _FEATURE_NAMES
+        }
+        ats_delta = round(right_features.ats_score - left_features.ats_score, 2)
+        stronger = (
+            right.resume_id
+            if ats_delta > 0
+            else left.resume_id
+            if ats_delta < 0
+            else None
+        )
+        return ResumeVersionComparison(
+            left_resume_id=left_resume_id,
+            right_resume_id=right_resume_id,
+            ats_delta=ats_delta,
+            feature_deltas=deltas,
+            stronger_version=stronger,
+            explanation=(
+                "Right version has stronger deterministic ATS indicators."
+                if ats_delta > 0
+                else "Left version has stronger deterministic ATS indicators."
+                if ats_delta < 0
+                else "Both versions are currently tied on deterministic ATS score."
+            ),
         )
 
     async def get_profile(self, user_id: str) -> ResumeCorrelationProfile:
@@ -456,6 +783,27 @@ class ResumeCorrelationService:
         if name == "quantified_achievements":
             return min(1.0, value / 10)
         return float(value)
+
+    @staticmethod
+    def _role_alignment(text: str, target_role: str | None) -> float:
+        if not target_role:
+            return 0.55
+        role_terms = {
+            token
+            for token in re.findall(r"[a-z0-9]+", target_role.lower())
+            if len(token) > 2 and token not in {"and", "the", "job", "role"}
+        }
+        if not role_terms:
+            return 0.55
+        matched = sum(1 for term in role_terms if term in text)
+        related_bonus = 0.0
+        if "backend" in role_terms and _BACKEND_KEYWORDS & set(re.findall(r"[a-z0-9]+", text)):
+            related_bonus += 0.20
+        if "frontend" in role_terms and _FRONTEND_KEYWORDS & set(re.findall(r"[a-z0-9]+", text)):
+            related_bonus += 0.20
+        if "data" in role_terms and _DATA_KEYWORDS & set(re.findall(r"[a-z0-9]+", text)):
+            related_bonus += 0.20
+        return round(min(1.0, matched / len(role_terms) + related_bonus), 4)
 
     @staticmethod
     def _pearson(xs: list[float], ys: list[float]) -> float:

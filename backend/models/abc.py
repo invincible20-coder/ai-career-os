@@ -19,6 +19,7 @@ class BehaviorEventType(str, Enum):
 
     JOB_VIEWED = "job_viewed"
     JOB_CLICKED = "job_clicked"
+    JOB_IGNORED = "job_ignored"
     JOB_SAVED = "job_saved"
     APPLICATION_STARTED = "application_started"
     APPLICATION_COMPLETED = "application_completed"
@@ -116,6 +117,7 @@ class CategoryStrategyStats(BaseModel):
     click_rate: float = 0.0
     application_rate: float = 0.0
     abandonment_rate: float = 0.0
+    ignore_rate: float = 0.0
     resume_performance_score: float = 0.0
     recent_trend_score: float = 0.0
     score: float = 0.0
@@ -154,10 +156,15 @@ class RankedJob(BaseModel):
     outcome_score: float
     category_weight: float
     confidence: float
+    confidence_percent: float
+    uncertainty_percent: float
+    evidence_strength: float
     exploration_bonus: float
     repetition_penalty: float
     final_score: float
     reason: str
+    explanation: list[str] = Field(default_factory=list)
+    signal_breakdown: dict[str, float] = Field(default_factory=dict)
     strategy_weights: dict[str, float] = Field(default_factory=dict)
     filters: dict[str, Any] = Field(default_factory=dict)
 

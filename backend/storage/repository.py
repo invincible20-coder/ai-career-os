@@ -219,6 +219,11 @@ class HuntRepository:
                         recommendation_reason=job.recommendation_reason,
                         recommendation_event_id=job.recommendation_event_id,
                         category=job.job_category,
+                        trust_score=job.trust_score,
+                        source_confidence=job.source_confidence,
+                        legitimacy_probability=job.legitimacy_probability,
+                        scam_flags_json=job.scam_flags,
+                        duplicate_of=job.duplicate_of,
                         scraped_at=job.scraped_at,
                     )
                     for index, job in enumerate(unique_jobs, start=1)
@@ -469,6 +474,11 @@ class HuntRepository:
                 recommendation_reason=record.recommendation_reason,
                 recommendation_event_id=record.recommendation_event_id,
                 job_category=record.category,
+                trust_score=record.trust_score,
+                source_confidence=record.source_confidence,
+                legitimacy_probability=record.legitimacy_probability,
+                scam_flags=record.scam_flags_json or [],
+                duplicate_of=record.duplicate_of,
             )
             for record in job_records
         ]
@@ -774,22 +784,29 @@ class HuntRepository:
         )
 
     async def upsert_user_strategy_profile(self, profile: UserStrategyProfile) -> None:
-        async with self.session.begin():
-            await self.session.merge(
-                UserStrategyProfileRecord(
-                    user_id=profile.user_id,
-                    category_weights_json=profile.category_weights,
-                    category_success_rates_json=profile.category_success_rates,
-                    click_rates_json=profile.click_rates,
-                    application_rates_json=profile.application_rates,
-                    avg_response_times_json=profile.avg_response_times,
-                    category_profiles_json={
-                        key: value.model_dump(mode="json")
-                        for key, value in profile.category_profiles.items()
-                    },
-                    updated_at=profile.updated_at,
-                )
-            )
+        for attempt in range(2):
+            try:
+                async with self.session.begin():
+                    await self.session.merge(
+                        UserStrategyProfileRecord(
+                            user_id=profile.user_id,
+                            category_weights_json=profile.category_weights,
+                            category_success_rates_json=profile.category_success_rates,
+                            click_rates_json=profile.click_rates,
+                            application_rates_json=profile.application_rates,
+                            avg_response_times_json=profile.avg_response_times,
+                            category_profiles_json={
+                                key: value.model_dump(mode="json")
+                                for key, value in profile.category_profiles.items()
+                            },
+                            updated_at=profile.updated_at,
+                        )
+                    )
+                return
+            except IntegrityError:
+                await self.session.rollback()
+                if attempt == 1:
+                    raise
 
     async def save_conversation_turn(self, turn: ConversationTurn) -> None:
         async with self.session.begin():
@@ -859,17 +876,24 @@ class HuntRepository:
         )
 
     async def upsert_user_intelligence_profile(self, state: UserIntelligenceState) -> None:
-        async with self.session.begin():
-            await self.session.merge(
-                UserIntelligenceProfileRecord(
-                    user_id=state.user_id,
-                    latest_intent_json=state.intent.model_dump(mode="json"),
-                    latest_discovery_json=state.discovery.model_dump(mode="json"),
-                    latest_confidence_json=state.confidence.model_dump(mode="json"),
-                    conversation_count=state.conversation_count,
-                    updated_at=state.updated_at,
-                )
-            )
+        for attempt in range(2):
+            try:
+                async with self.session.begin():
+                    await self.session.merge(
+                        UserIntelligenceProfileRecord(
+                            user_id=state.user_id,
+                            latest_intent_json=state.intent.model_dump(mode="json"),
+                            latest_discovery_json=state.discovery.model_dump(mode="json"),
+                            latest_confidence_json=state.confidence.model_dump(mode="json"),
+                            conversation_count=state.conversation_count,
+                            updated_at=state.updated_at,
+                        )
+                    )
+                return
+            except IntegrityError:
+                await self.session.rollback()
+                if attempt == 1:
+                    raise
 
     async def recent_recommendation_history(
         self,
@@ -994,22 +1018,29 @@ class HuntRepository:
         self,
         profile: ResumeCorrelationProfile,
     ) -> None:
-        async with self.session.begin():
-            await self.session.merge(
-                ResumeCorrelationProfileRecord(
-                    user_id=profile.user_id,
-                    feature_correlations_json={
-                        key: value.model_dump(mode="json")
-                        for key, value in profile.feature_correlations.items()
-                    },
-                    resume_effectiveness_json={
-                        key: value.model_dump(mode="json")
-                        for key, value in profile.resume_effectiveness.items()
-                    },
-                    total_linked_outcomes=profile.total_linked_outcomes,
-                    updated_at=profile.updated_at,
-                )
-            )
+        for attempt in range(2):
+            try:
+                async with self.session.begin():
+                    await self.session.merge(
+                        ResumeCorrelationProfileRecord(
+                            user_id=profile.user_id,
+                            feature_correlations_json={
+                                key: value.model_dump(mode="json")
+                                for key, value in profile.feature_correlations.items()
+                            },
+                            resume_effectiveness_json={
+                                key: value.model_dump(mode="json")
+                                for key, value in profile.resume_effectiveness.items()
+                            },
+                            total_linked_outcomes=profile.total_linked_outcomes,
+                            updated_at=profile.updated_at,
+                        )
+                    )
+                return
+            except IntegrityError:
+                await self.session.rollback()
+                if attempt == 1:
+                    raise
 
     async def get_predictive_career_profile(
         self,
@@ -1035,18 +1066,25 @@ class HuntRepository:
         self,
         profile: PredictiveCareerProfile,
     ) -> None:
-        async with self.session.begin():
-            await self.session.merge(
-                PredictiveCareerProfileRecord(
-                    user_id=profile.user_id,
-                    user_vector_json=profile.user_vector.model_dump(mode="json"),
-                    predictions_json=[
-                        prediction.model_dump(mode="json")
-                        for prediction in profile.predictions
-                    ],
-                    updated_at=profile.updated_at,
-                )
-            )
+        for attempt in range(2):
+            try:
+                async with self.session.begin():
+                    await self.session.merge(
+                        PredictiveCareerProfileRecord(
+                            user_id=profile.user_id,
+                            user_vector_json=profile.user_vector.model_dump(mode="json"),
+                            predictions_json=[
+                                prediction.model_dump(mode="json")
+                                for prediction in profile.predictions
+                            ],
+                            updated_at=profile.updated_at,
+                        )
+                    )
+                return
+            except IntegrityError:
+                await self.session.rollback()
+                if attempt == 1:
+                    raise
 
     async def _get_hunt_record(self, hunt_id: str, *, for_update: bool = False) -> HuntRecord:
         statement = select(HuntRecord).where(HuntRecord.hunt_id == hunt_id)

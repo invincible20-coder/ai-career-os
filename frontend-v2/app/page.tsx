@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
-import { Sparkles, Zap } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Sparkles, Zap, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { CommandInput } from "@/components/command/CommandInput";
 import { SuggestionChips } from "@/components/command/SuggestionChips";
@@ -11,22 +11,45 @@ import { AgentActivity } from "@/components/ai/AgentActivity";
 import { PersonaDetector } from "@/components/ai/PersonaDetector";
 import { LearningTimeline } from "@/components/ai/LearningTimeline";
 import { GlassCard } from "@/components/glass/GlassCard";
+import { useHuntStore } from "@/lib/store";
 
 export default function CommandCenterPage() {
   const [goal, setGoal] = useState("");
-  const [hasSubmitted, setHasSubmitted] = useState(false);
 
+  // ── Backend-connected store ──
+  const startHunt = useHuntStore((s) => s.startHunt);
+  const recommendCareer = useHuntStore((s) => s.recommendCareer);
+  const checkHealth = useHuntStore((s) => s.checkHealth);
+  const setField = useHuntStore((s) => s.setField);
+  const activeAction = useHuntStore((s) => s.activeAction);
+  const serverState = useHuntStore((s) => s.serverState);
+  const huntResult = useHuntStore((s) => s.huntResult);
+  const errorMessage = useHuntStore((s) => s.errorMessage);
+  const jobs = useHuntStore((s) => s.jobs);
+  const applications = useHuntStore((s) => s.applications);
+
+  // ── Health check on mount ──
+  useEffect(() => {
+    checkHealth();
+  }, [checkHealth]);
+
+  // ── Submit handler — calls actual backend ──
   const handleSubmit = useCallback(() => {
-    if (!goal.trim()) return;
-    setHasSubmitted(true);
-  }, [goal]);
+    if (!goal.trim() || activeAction) return;
+    setField("goal", goal.trim());
+    startHunt(goal.trim());
+  }, [goal, activeAction, setField, startHunt]);
 
-  const handleChipSelect = useCallback((label: string) => {
-    setGoal((prev) =>
-      prev ? `${prev}\n\nI'm interested in: ${label}` : `I'm interested in: ${label}`
-    );
-  }, []);
+  // ── Chip select → populate goal and launch career recommendation ──
+  const handleChipSelect = useCallback(
+    (label: string) => {
+      setGoal(label);
+      setField("goal", label);
+    },
+    [setField]
+  );
 
+  const isWorking = !!activeAction;
   const greeting = getGreeting();
 
   return (
@@ -35,6 +58,26 @@ export default function CommandCenterPage() {
       contextContent={<CommandCenterContext />}
     >
       <div className="space-y-6">
+        {/* Server Status */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-center gap-2"
+        >
+          <div
+            className={`h-2 w-2 rounded-full ${
+              serverState.tone === "online"
+                ? "bg-emerald-400"
+                : serverState.tone === "checking"
+                ? "bg-amber-400 animate-pulse"
+                : "bg-red-400"
+            }`}
+          />
+          <span className="text-[10px] font-mono text-muted-foreground">
+            Backend: {serverState.label}
+          </span>
+        </motion.div>
+
         {/* Greeting */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -66,8 +109,98 @@ export default function CommandCenterPage() {
             value={goal}
             onChange={setGoal}
             onSubmit={handleSubmit}
+            disabled={isWorking}
           />
         </motion.div>
+
+        {/* Error display */}
+        <AnimatePresence>
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <GlassCard className="p-4 border-red-500/20 bg-red-500/5">
+                <div className="flex items-center gap-2 text-red-400">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <p className="text-xs">{errorMessage}</p>
+                </div>
+              </GlassCard>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Active operation indicator */}
+        <AnimatePresence>
+          {isWorking && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+            >
+              <GlassCard className="p-4 border-indigo-500/20 bg-indigo-500/5">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-4 w-4 text-indigo-400 animate-spin" />
+                  <div>
+                    <p className="text-xs font-semibold text-indigo-300">
+                      {activeAction === "hunt"
+                        ? "Autonomous hunt in progress…"
+                        : "Analyzing career options…"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Agents are communicating with the backend
+                    </p>
+                  </div>
+                </div>
+              </GlassCard>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Hunt results */}
+        <AnimatePresence>
+          {huntResult && !isWorking && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+            >
+              <GlassCard className="p-5 border-emerald-500/20 bg-emerald-500/5">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <h3 className="text-sm font-semibold text-emerald-300">
+                    Hunt Complete
+                  </h3>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">
+                      {jobs.length}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Jobs Found
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">
+                      {applications.length}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Applications
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground capitalize">
+                      {huntResult?.status ?? "done"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">Status</p>
+                  </div>
+                </div>
+              </GlassCard>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Suggestion Chips */}
         <motion.div
@@ -100,6 +233,13 @@ export default function CommandCenterPage() {
             description="Launch an autonomous job search with AI agents"
             action="Start Hunt"
             gradient="from-amber-500/10 to-orange-500/5"
+            onClick={() => {
+              if (goal.trim()) {
+                setField("goal", goal.trim());
+                startHunt(goal.trim());
+              }
+            }}
+            disabled={isWorking || !goal.trim()}
           />
           <QuickCard
             icon={<Sparkles className="h-4 w-4 text-violet-400" />}
@@ -107,6 +247,8 @@ export default function CommandCenterPage() {
             description="Get AI-powered career path recommendations"
             action="Analyze"
             gradient="from-violet-500/10 to-purple-500/5"
+            onClick={() => recommendCareer()}
+            disabled={isWorking}
           />
           <QuickCard
             icon={<Zap className="h-4 w-4 text-emerald-400" />}
@@ -114,6 +256,10 @@ export default function CommandCenterPage() {
             description="Optimize your resume with AI intelligence"
             action="Open Lab"
             gradient="from-emerald-500/10 to-teal-500/5"
+            onClick={() => {
+              window.location.href = "/resume-lab";
+            }}
+            disabled={false}
           />
         </motion.div>
 
@@ -145,12 +291,16 @@ function QuickCard({
   description,
   action,
   gradient,
+  onClick,
+  disabled = false,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
   action: string;
   gradient: string;
+  onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <GlassCard className={`p-4 bg-gradient-to-br ${gradient}`}>
@@ -166,7 +316,11 @@ function QuickCard({
           <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
             {description}
           </p>
-          <button className="mt-3 text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
+          <button
+            onClick={onClick}
+            disabled={disabled}
+            className="mt-3 text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             {action}
             <span className="text-[10px]">→</span>
           </button>

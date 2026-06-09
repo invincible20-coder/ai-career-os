@@ -1,88 +1,53 @@
-import asyncio
-import json
-from uuid import uuid4
 from datetime import datetime, timezone
-from backend.services.event_bus import event_bus
-from backend.models.resume_intelligence import ResumeFeatures
 
-async def parse_and_analyze_resume(user_id: str, file_name: str, file_content: bytes):
+from backend.services.event_bus import EventBus
+from backend.services.resume_correlation_service import ResumeCorrelationService
+from backend.storage.repository import HuntRepository
+
+
+async def parse_and_analyze_resume(
+    *,
+    user_id: str,
+    file_name: str,
+    file_content: bytes,
+    repository: HuntRepository,
+    event_bus: EventBus,
+    target_role: str | None = None,
+) -> dict:
     """
-    Simulates a heavy ATS parser and scoring engine.
-    Emits real-time state updates via EventBus.
+    Parse, score, persist, and stream deterministic resume intelligence.
     """
     channel = f"user_{user_id}"
-    
-    # 1. Start Analysis
-    await event_bus.publish(channel, {"type": "START", "message": f"Initializing parsing for {file_name}..."})
-    await asyncio.sleep(1.5)
-    
-    # 2. Extract Text
-    await event_bus.publish(channel, {"type": "PROGRESS", "message": "Extracting text and structure...", "progress": 20})
-    await asyncio.sleep(2)
-    
-    # 3. Evaluate ATS
-    await event_bus.publish(channel, {"type": "PROGRESS", "message": "Evaluating ATS structural compatibility...", "progress": 40})
-    await asyncio.sleep(1.5)
-    
-    # 4. Detect Keywords
-    await event_bus.publish(channel, {"type": "PROGRESS", "message": "Detecting keyword density and skills...", "progress": 60})
-    await asyncio.sleep(2)
-    
-    # 5. Quantify Achievements
-    await event_bus.publish(channel, {"type": "PROGRESS", "message": "Analyzing measurable impact and achievements...", "progress": 80})
-    await asyncio.sleep(1.5)
-    
-    # 6. Finalizing
-    await event_bus.publish(channel, {"type": "PROGRESS", "message": "Finalizing correlation models...", "progress": 95})
-    await asyncio.sleep(1)
-    
-    # Generate mock features (this should be an LLM or deterministic pipeline in reality)
-    features = ResumeFeatures(
-        ats_score=78.5,
-        keyword_density=0.65,
-        quantified_achievements=3,
-        project_complexity_score=0.72,
-        skill_diversity=0.8,
-        education_strength=0.9,
-        experience_depth=0.6,
-        readability_score=0.85,
-        formatting_consistency=0.95,
-        action_verb_usage=0.7,
-        backend_keywords=12,
-        frontend_keywords=4,
-        data_keywords=2,
-        technical_depth=0.75,
-        communication_indicators=0.6
+    await event_bus.publish(
+        channel,
+        {"type": "resume_analysis_started", "message": f"Initializing parsing for {file_name}..."},
     )
-    
-    weaknesses = [
-        {
-            "id": "w1",
-            "category": "Impact",
-            "severity": "high",
-            "description": "Projects lack measurable impact.",
-            "recommendation": "Add quantified outcomes such as performance improvements or scale handled.",
-            "expected_improvement": "ATS relevance +12%",
-            "confidence": 0.88
-        },
-        {
-            "id": "w2",
-            "category": "Keywords",
-            "severity": "medium",
-            "description": "Missing modern framework terminology.",
-            "recommendation": "Include specific versions and associated tools (e.g., React 18, Next.js).",
-            "expected_improvement": "Searchability +8%",
-            "confidence": 0.92
-        }
-    ]
-    
+    text = file_content.decode("utf-8", errors="ignore")
+    if not text.strip():
+        text = f"Binary resume upload: {file_name}"
+    await event_bus.publish(
+        channel,
+        {"type": "resume_analysis_progress", "message": "Extracted text and structure.", "progress": 25},
+    )
+    service = ResumeCorrelationService(repository)
+    report = await service.analyze_resume_report(
+        user_id=user_id,
+        resume_id=file_name,
+        resume_version=file_name,
+        content=text,
+        target_role=target_role,
+    )
+    await event_bus.publish(
+        channel,
+        {"type": "resume_analysis_progress", "message": "Computed ATS, weaknesses, and predictions.", "progress": 85},
+    )
     result = {
         "file_name": file_name,
-        "features": features.model_dump(),
-        "weaknesses": weaknesses,
-        "confidence": 0.85,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "report": report.model_dump(mode="json"),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    
-    await event_bus.publish(channel, {"type": "COMPLETE", "message": "Analysis complete.", "data": result})
+    await event_bus.publish(
+        channel,
+        {"type": "resume_analysis_completed", "message": "Analysis complete.", "data": result, "progress": 100},
+    )
     return result

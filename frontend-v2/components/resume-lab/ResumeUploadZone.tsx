@@ -43,7 +43,7 @@ export function ResumeUploadZone({ onUploadStart, userId }: ResumeUploadZoneProp
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/resume/upload`, {
+      const response = await fetch(`/api/v1/resume/upload`, {
         method: 'POST',
         headers: {
           'x-user-id': userId
@@ -54,7 +54,7 @@ export function ResumeUploadZone({ onUploadStart, userId }: ResumeUploadZoneProp
       if (!response.ok) throw new Error("Upload failed");
       
       onUploadStart(userId, file.name);
-    } catch (err) {
+    } catch {
       setError("Failed to initialize intelligence analysis.");
     }
   };

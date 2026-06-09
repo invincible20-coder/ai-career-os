@@ -57,7 +57,7 @@ export function ActivityStream() {
 
       {/* Stream */}
       <div className="max-h-[320px] overflow-y-auto px-3 py-2 space-y-1">
-        {logs.length > 1 ? (
+        {logs.length > 0 ? (
           logs.map((log, i) => <ActivityItem key={log.id} log={log} index={i} />)
         ) : (
           <EmptyState variant="idle" className="border-0 bg-transparent py-6" />

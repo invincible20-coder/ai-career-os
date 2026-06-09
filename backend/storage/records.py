@@ -113,6 +113,11 @@ class JobRecord(Base):
     recommendation_reason: Mapped[str | None] = mapped_column(Text)
     recommendation_event_id: Mapped[str | None] = mapped_column(String(36), index=True)
     category: Mapped[str | None] = mapped_column(String(64), index=True)
+    trust_score: Mapped[float | None] = mapped_column(Float)
+    source_confidence: Mapped[float | None] = mapped_column(Float)
+    legitimacy_probability: Mapped[float | None] = mapped_column(Float)
+    scam_flags_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    duplicate_of: Mapped[str | None] = mapped_column(String(128))
     scraped_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,

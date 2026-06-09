@@ -8,7 +8,12 @@ from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from backend.storage.records import Base
-from backend.storage.auth_records import UserRecord, LinkedAccountRecord, SessionRecord
+from backend.storage.auth_records import (
+    IdentityIntelligenceRecord,
+    LinkedAccountRecord,
+    SessionRecord,
+    UserRecord,
+)
 
 
 class Database:
@@ -149,6 +154,16 @@ class Database:
             statements.append("ALTER TABLE jobs ADD COLUMN recommendation_event_id VARCHAR(36)")
         if "category" not in existing_columns:
             statements.append("ALTER TABLE jobs ADD COLUMN category VARCHAR(64)")
+        if "trust_score" not in existing_columns:
+            statements.append("ALTER TABLE jobs ADD COLUMN trust_score FLOAT")
+        if "source_confidence" not in existing_columns:
+            statements.append("ALTER TABLE jobs ADD COLUMN source_confidence FLOAT")
+        if "legitimacy_probability" not in existing_columns:
+            statements.append("ALTER TABLE jobs ADD COLUMN legitimacy_probability FLOAT")
+        if "scam_flags_json" not in existing_columns:
+            statements.append("ALTER TABLE jobs ADD COLUMN scam_flags_json JSON")
+        if "duplicate_of" not in existing_columns:
+            statements.append("ALTER TABLE jobs ADD COLUMN duplicate_of VARCHAR(128)")
 
         for statement in statements:
             connection.execute(text(statement))

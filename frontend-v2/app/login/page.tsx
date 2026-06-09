@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { GlassCard } from "@/components/glass/GlassCard";
 import { Mail, Hexagon, Fingerprint, Lock, ShieldCheck } from "lucide-react";
 
-const Github = (props: any) => (
+const Github = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     {...props}
     xmlns="http://www.w3.org/2000/svg"

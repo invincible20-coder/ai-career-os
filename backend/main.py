@@ -23,6 +23,11 @@ from backend.api.errors import register_exception_handlers
 from backend.core.config import Settings, get_settings
 from backend.core.llm import OpenAIJSONClient
 from backend.core.logger import configure_logging, get_logger
+from backend.services.background_worker import BackgroundWorker
+from backend.services.cache import CacheClient
+from backend.services.event_bus import EventBus
+from backend.services.metrics import MetricsCollector
+from backend.services.security import SecurityHeadersMiddleware
 from backend.storage import Database
 
 
@@ -61,13 +66,24 @@ def create_app(
     logger = get_logger(__name__)
 
     database = database or Database(settings.database_url)
+    event_bus = EventBus()
+    cache = CacheClient(redis_url=settings.redis_url, enabled=settings.redis_enabled)
+    metrics = MetricsCollector()
+    worker = BackgroundWorker()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.settings = settings
         app.state.db = database
         app.state.agents = agents or _build_agent_suite(settings)
+        app.state.event_bus = event_bus
+        app.state.cache = cache
+        app.state.metrics = metrics
+        app.state.background_worker = worker
         await database.create_schema()
+        await cache.connect()
+        if settings.background_worker_enabled:
+            await worker.start()
         logger.info(
             "app_startup",
             extra={
@@ -77,6 +93,9 @@ def create_app(
             },
         )
         yield
+        if settings.background_worker_enabled:
+            await worker.stop()
+        await cache.close()
         await database.dispose()
         logger.info("app_shutdown", extra={"event": "app_shutdown"})
 
@@ -92,9 +111,33 @@ def create_app(
         CORSMiddleware,
         allow_origins=list(settings.cors_allowed_origins),
         allow_credentials=settings.cors_allow_credentials,
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-CSRF-Token",
+            "X-User-Id",
+            "X-Session-Id",
+        ],
     )
+    if settings.security_headers_enabled:
+        app.add_middleware(
+            SecurityHeadersMiddleware,
+            csrf_enabled=settings.csrf_protection_enabled,
+        )
+
+    @app.middleware("http")
+    async def metrics_middleware(request, call_next):
+        started_at = metrics.timer()
+        response = await call_next(request)
+        if settings.metrics_enabled:
+            metrics.observe_request(
+                path=request.url.path,
+                method=request.method,
+                status_code=response.status_code,
+                started_at=started_at,
+            )
+        return response
 
     register_exception_handlers(app)
     app.include_router(router, prefix=settings.api_prefix)

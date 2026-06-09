@@ -161,6 +161,7 @@ tests/
 | `resume_fingerprints` | Deterministic resume feature vectors keyed by resume content | `user_id`, `content_hash` |
 | `resume_correlation_profiles` | Confidence-aware resume/outcome correlations | `user_id` |
 | `predictive_career_profiles` | Latest long-term user vector and career trajectories | `user_id` |
+| `identity_intelligence` | Provider-derived identity signals linked to the adaptive profile | `user_id` |
 
 All reads and writes are scoped by `hunt_id`, so simultaneous hunts are fully isolated.
 Behavior analytics are scoped by `user_key`, which comes from `X-User-Id` when supplied, then falls back to the caller IP.
@@ -850,6 +851,79 @@ Returns the list of `Application` objects with embedded resume and cover letter.
 
 ---
 
+## 🧠 Completed Intelligence Systems
+
+### Resume Intelligence
+
+`POST /api/v1/resume-intelligence/report` returns a deterministic resume intelligence report with:
+
+- semantic profile: skills, technologies, leadership signals, domain specialization, achievement density
+- ATS breakdown: keyword relevance, formatting, structure, readability, quantified metrics, role alignment, semantic similarity
+- weakness analysis: severity, explanation, optimization suggestion, expected ATS impact
+- optimization prediction: interview probability, ATS probability, rejection likelihood, confidence, uncertainty
+
+Resume fingerprints are persisted and linked to applications. Outcomes then update resume effectiveness and feature correlations through `resume_correlation_profiles`.
+
+### Adaptive Recommendation Explainability
+
+`POST /api/v1/abc/recommendations` now returns every ranked job with:
+
+- `signal_breakdown`
+- `explanation`
+- `confidence_percent`
+- `uncertainty_percent`
+- `evidence_strength`
+
+The ranking loop uses static match, behavior signals, outcome signals, learned category weights, repetition dampening, exploration bonus, and trust penalties.
+
+### ABC Closed Learning Loop
+
+The system persists:
+
+- A: recommendation events with rank, reason, strategy snapshot, filters, signal breakdown
+- B: behavior events including clicks, applications, abandonment, resume selection, and ignored jobs
+- C: outcomes including no response, rejection, interview, offer, follow-up, and response speed
+
+New outcomes refresh user strategy profiles and change later rankings.
+
+### Streaming And Observability
+
+`GET /api/v1/events/stream/{channel}` exposes Server-Sent Events for real backend events:
+
+- hunt started/completed/failed
+- step started/completed/retrying/failed
+- recommendations ranked
+- behavior logged
+- outcome logged
+- resume analysis started/progress/completed
+
+`GET /api/v1/metrics` returns request counts, status counts, average latency, and event counters.
+
+### Search Trust
+
+Scraped and fallback jobs are enriched with:
+
+- trust score
+- source confidence
+- legitimacy probability
+- scam flags
+- semantic duplicate removal
+
+Low-trust jobs are penalized during adaptive ranking.
+
+### Identity Intelligence
+
+Auth now includes provider configuration and local provider linking endpoints:
+
+- `GET /api/v1/auth/oauth/providers`
+- `GET /api/v1/auth/oauth/{provider}/authorize`
+- `POST /api/v1/auth/oauth/link-local/{user_id}`
+- `GET /api/v1/auth/identity-graph/{user_id}`
+
+GitHub and LinkedIn metadata are converted into deterministic intelligence signals and linked into the unified adaptive identity graph.
+
+---
+
 ## ⚙️ Configuration
 
 All configuration is loaded from environment variables. Copy `.env.example` to `.env` and customise:
@@ -863,8 +937,9 @@ cp .env.example .env
 | Variable | Default | Description |
 |---|---|---|
 | **LLM** | | |
-| `LLM_PROVIDER` | `openai` | LLM provider |
-| `OPENAI_API_KEY` | *(required)* | Your OpenAI API key |
+| `LLM_PROVIDER` | `mock` | LLM provider |
+| `USE_MOCK_LLM` | `true` | Run without external paid APIs by default |
+| `OPENAI_API_KEY` | *(optional in mock mode)* | OpenAI API key if real LLM mode is enabled |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Model used for plan/resume/cover letter generation |
 | `OPENAI_TEMPERATURE` | `0.4` | Sampling temperature |
 | `OPENAI_MAX_TOKENS` | `2048` | Max tokens per LLM call |
@@ -874,6 +949,7 @@ cp .env.example .env
 | `APP_VERSION` | `2.0.0` | Reported in health check |
 | `DEBUG` | `false` | Enable debug mode / auto-reload |
 | `LOG_LEVEL` | `INFO` | Python log level |
+| `AUTH_COOKIE_SECURE` | `false` | Set to `true` only when serving auth cookies over HTTPS |
 | **Storage** | | |
 | `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/job_hunt_agent` | Async database connection string |
 | **Job Search** | | |
@@ -890,6 +966,16 @@ cp .env.example .env
 | **Rate Limit** | | |
 | `HUNT_RATE_LIMIT_REQUESTS` | `10` | Max hunt requests per client window |
 | `HUNT_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window length |
+| **Redis / Workers / Observability** | | |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection string |
+| `REDIS_ENABLED` | `false` | Enable Redis cache/session facade |
+| `BACKGROUND_WORKER_ENABLED` | `true` | Enable local async background worker |
+| `SECURITY_HEADERS_ENABLED` | `true` | Add security headers |
+| `CSRF_PROTECTION_ENABLED` | `true` | Require CSRF token for cookie-auth unsafe methods |
+| `METRICS_ENABLED` | `true` | Collect request metrics |
+| **OAuth / Identity** | | |
+| `OAUTH_REDIRECT_BASE_URL` | `http://localhost:8000/api/v1/auth/oauth` | OAuth callback base |
+| `OAUTH_ENABLED_PROVIDERS` | `google,github,linkedin,apple,microsoft,discord` | Enabled OAuth provider list |
 | **API Server** | | |
 | `API_PREFIX` | `/api/v1` | URL prefix for all routes |
 | `HOST` | `0.0.0.0` | Bind address |
@@ -906,7 +992,7 @@ cp .env.example .env
 
 - **Python 3.12+**
 - **PostgreSQL** (production) — or use SQLite for local testing
-- **OpenAI API key**
+- **OpenAI API key** only if you disable mock LLM mode
 
 ### Installation
 
@@ -925,7 +1011,7 @@ pip install -r requirements.txt
 
 # Configure environment
 cp .env.example .env
-# Edit .env and set your OPENAI_API_KEY and DATABASE_URL
+# Edit .env and set DATABASE_URL. OPENAI_API_KEY is optional while USE_MOCK_LLM=true.
 ```
 
 ### Running the Server
@@ -969,6 +1055,9 @@ python -m unittest discover -s tests
 | **API — Failures** | Returns `500` for step execution failures |
 | **Concurrency** | Concurrent hunt requests keep jobs and applications isolated by `hunt_id` |
 | **Behavior Engine** | Metrics, classification thresholds, behavior endpoints, and adaptive hunt volume |
+| **ABC Intelligence** | Adaptive ranking evolution, opposite user histories, outcome-linked learning |
+| **Resume Intelligence** | Resume feature extraction, correlations, effectiveness, probabilistic career modeling |
+| **Streaming / Trust / Identity** | SSE event bus, scam detection/deduplication, identity graph persistence |
 
 ---
 
@@ -980,7 +1069,9 @@ python -m unittest discover -s tests
 | ORM | [SQLAlchemy 2.0+](https://www.sqlalchemy.org/) (async) |
 | Database (prod) | PostgreSQL via [asyncpg](https://github.com/MagicStack/asyncpg) |
 | Database (test) | SQLite via [aiosqlite](https://github.com/omnilib/aiosqlite) |
-| LLM Client | [OpenAI Python SDK](https://github.com/openai/openai-python) |
+| Cache / Streams | Optional Redis plus local async fallback |
+| LLM Client | Mock deterministic LLM by default; OpenAI SDK supported when enabled |
+| Auth | Cookie sessions, JWTs, OAuth provider scaffolding |
 | Validation | [Pydantic v2](https://docs.pydantic.dev/) |
 | HTTP Client | [httpx](https://www.python-httpx.org/) |
 | HTML Parsing | [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/) |
