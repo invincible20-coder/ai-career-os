@@ -10,8 +10,8 @@ import { EmptyState } from "@/components/shared/EmptyState";
 
 function getGradient(index: number): string {
   const gradients = [
-    "from-indigo-500/10 to-violet-500/10",
-    "from-violet-500/10 to-cyan-500/10",
+    "from-teal-500/10 to-cyan-500/10",
+    "from-cyan-500/10 to-cyan-500/10",
     "from-cyan-500/10 to-emerald-500/10",
   ];
   return gradients[index % gradients.length];
@@ -30,7 +30,7 @@ export function RecommendationPanel() {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.04]">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-violet-400" />
+          <Sparkles className="h-4 w-4 text-cyan-400" />
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
               AI Recommendations
@@ -41,7 +41,7 @@ export function RecommendationPanel() {
           </div>
         </div>
         {roles.length > 0 && (
-          <Badge variant="outline" className="border-violet-500/20 bg-violet-500/10 text-[10px] text-violet-400">
+          <Badge variant="outline" className="border-cyan-500/20 bg-cyan-500/10 text-[10px] text-cyan-400">
             {roles.length} roles
           </Badge>
         )}

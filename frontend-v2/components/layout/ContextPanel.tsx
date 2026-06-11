@@ -76,7 +76,7 @@ function DefaultContextContent() {
 
       {/* Adaptive Hints */}
       <ContextSection
-        icon={<Sparkles className="h-3.5 w-3.5 text-violet-400" />}
+        icon={<Sparkles className="h-3.5 w-3.5 text-cyan-400" />}
         title="Adaptive Hints"
       >
         <div className="space-y-2">
@@ -149,7 +149,7 @@ function ConfidenceRow({ label, value }: { label: string; value: number }) {
         style={{ background: "var(--glass-bg-elevated)" }}
       >
         <motion.div
-          className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+          className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500"
           initial={{ width: 0 }}
           animate={{ width: `${value}%` }}
           transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
@@ -162,7 +162,7 @@ function ConfidenceRow({ label, value }: { label: string; value: number }) {
 function HintItem({ text }: { text: string }) {
   return (
     <div className="flex items-start gap-2">
-      <div className="mt-1 h-1 w-1 rounded-full bg-violet-400 shrink-0" />
+      <div className="mt-1 h-1 w-1 rounded-full bg-cyan-400 shrink-0" />
       <p className="text-[11px] text-muted-foreground leading-relaxed">{text}</p>
     </div>
   );

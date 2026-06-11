@@ -68,7 +68,7 @@ function buildTrackerRows(jobs: Job[], applications: Application[], tracker: Tra
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "border-white/[0.08] bg-white/[0.03] text-slate-500",
-  prepared: "border-indigo-500/20 bg-indigo-500/10 text-indigo-400",
+  prepared: "border-teal-500/20 bg-teal-500/10 text-teal-400",
   applied: "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
   failed: "border-red-500/20 bg-red-500/10 text-red-400",
 };

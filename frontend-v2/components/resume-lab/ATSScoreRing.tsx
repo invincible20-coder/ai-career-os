@@ -46,9 +46,9 @@ export function ATSScoreRing({ score, confidence, trend = "up" }: ATSScoreRingPr
     glowClass = "shadow-emerald-500/20";
     strokeClass = "stroke-emerald-400";
   } else if (score >= 60) {
-    colorClass = "text-indigo-400";
-    glowClass = "shadow-indigo-500/20";
-    strokeClass = "stroke-indigo-400";
+    colorClass = "text-teal-400";
+    glowClass = "shadow-teal-500/20";
+    strokeClass = "stroke-teal-400";
   } else if (score >= 40) {
     colorClass = "text-yellow-400";
     glowClass = "shadow-yellow-500/20";
@@ -104,7 +104,7 @@ export function ATSScoreRing({ score, confidence, trend = "up" }: ATSScoreRingPr
           transition={{ delay: 1, type: "spring", stiffness: 200 }}
           className="absolute -bottom-2 bg-surface-elevated border border-border/50 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xl"
         >
-          <Target className="h-3 w-3 text-indigo-400" />
+          <Target className="h-3 w-3 text-teal-400" />
           <span className="text-[10px] font-bold text-foreground">{(confidence * 100).toFixed(0)}% Conf.</span>
         </motion.div>
 

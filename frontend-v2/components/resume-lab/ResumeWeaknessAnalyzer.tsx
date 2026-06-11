@@ -52,7 +52,7 @@ export function ResumeWeaknessAnalyzer({ weaknesses }: ResumeWeaknessAnalyzerPro
             <GlassCard className={`p-4 border-l-4 ${
               weakness.severity === 'high' ? 'border-l-red-500 bg-red-500/5' : 
               weakness.severity === 'medium' ? 'border-l-yellow-500 bg-yellow-500/5' : 
-              'border-l-indigo-500 bg-indigo-500/5'
+              'border-l-teal-500 bg-teal-500/5'
             }`}>
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1">
@@ -60,7 +60,7 @@ export function ResumeWeaknessAnalyzer({ weaknesses }: ResumeWeaknessAnalyzerPro
                     <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
                       weakness.severity === 'high' ? 'bg-red-500/10 text-red-400' : 
                       weakness.severity === 'medium' ? 'bg-yellow-500/10 text-yellow-400' : 
-                      'bg-indigo-500/10 text-indigo-400'
+                      'bg-teal-500/10 text-teal-400'
                     }`}>
                       {weakness.severity} Severity
                     </span>
@@ -70,9 +70,9 @@ export function ResumeWeaknessAnalyzer({ weaknesses }: ResumeWeaknessAnalyzerPro
                   
                   <div className="mt-3 p-3 bg-surface rounded-lg border border-border/50">
                     <div className="flex items-start gap-2">
-                      <Zap className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
+                      <Zap className="h-4 w-4 text-teal-400 shrink-0 mt-0.5" />
                       <div>
-                        <span className="text-[11px] font-semibold text-indigo-300 uppercase tracking-wider mb-1 block">AI Recommendation</span>
+                        <span className="text-[11px] font-semibold text-teal-300 uppercase tracking-wider mb-1 block">AI Recommendation</span>
                         <p className="text-xs text-muted-foreground">{weakness.recommendation}</p>
                       </div>
                     </div>
@@ -92,14 +92,14 @@ export function ResumeWeaknessAnalyzer({ weaknesses }: ResumeWeaknessAnalyzerPro
                     </div>
                     <div className="h-1 w-full bg-surface-elevated rounded-full overflow-hidden">
                       <motion.div 
-                        className="h-full bg-indigo-500" 
+                        className="h-full bg-teal-500" 
                         initial={{ width: 0 }}
                         animate={{ width: `${weakness.confidence * 100}%` }}
                         transition={{ delay: index * 0.1 + 0.5, duration: 1 }}
                       />
                     </div>
                   </div>
-                  <button className="mt-4 w-full py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 group">
+                  <button className="mt-4 w-full py-2 bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 group">
                     Apply Fix <ArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
                   </button>
                 </div>

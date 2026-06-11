@@ -30,13 +30,13 @@ export function MetricsBar() {
       label: "Jobs Found",
       value: huntResult?.summary?.total_jobs ?? jobs.length,
       icon: Briefcase,
-      color: "text-indigo-400",
+      color: "text-teal-400",
     },
     {
       label: "Applications",
       value: huntResult?.summary?.total_applications ?? applications.length,
       icon: FileCheck,
-      color: "text-violet-400",
+      color: "text-cyan-400",
     },
     {
       label: "Success Rate",

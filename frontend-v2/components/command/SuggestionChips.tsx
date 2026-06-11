@@ -19,8 +19,8 @@ interface Chip {
 }
 
 const CHIPS: Chip[] = [
-  { label: "Backend Roles", icon: Server, gradient: "from-indigo-500/20 to-indigo-500/5" },
-  { label: "Product Engineering", icon: Boxes, gradient: "from-violet-500/20 to-violet-500/5" },
+  { label: "Backend Roles", icon: Server, gradient: "from-teal-500/20 to-teal-500/5" },
+  { label: "Product Engineering", icon: Boxes, gradient: "from-cyan-500/20 to-cyan-500/5" },
   { label: "Data Systems", icon: Database, gradient: "from-cyan-500/20 to-cyan-500/5" },
   { label: "Career Discovery", icon: Compass, gradient: "from-emerald-500/20 to-emerald-500/5" },
   { label: "Remote Jobs", icon: Globe, gradient: "from-amber-500/20 to-amber-500/5" },

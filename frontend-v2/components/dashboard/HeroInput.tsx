@@ -77,13 +77,13 @@ export function HeroInput() {
           </span>
           <div className="relative h-1.5 w-20 rounded-full bg-white/[0.06] overflow-hidden">
             <motion.div
-              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-teal-500 to-cyan-500"
               initial={{ width: 0 }}
               animate={{ width: `${profileSignal}%` }}
               transition={{ duration: 0.4, ease: "easeOut" }}
             />
           </div>
-          <span className="text-[10px] font-bold text-indigo-400">{profileSignal}%</span>
+          <span className="text-[10px] font-bold text-teal-400">{profileSignal}%</span>
         </div>
       </div>
 
@@ -95,7 +95,7 @@ export function HeroInput() {
             onChange={(e) => setField("goal", e.target.value)}
             placeholder={PLACEHOLDER_HINTS[placeholderIdx]}
             disabled={busy}
-            className="h-12 rounded-lg border-white/[0.08] bg-white/[0.03] pl-4 pr-4 text-sm text-slate-100 placeholder:text-slate-600 focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20"
+            className="h-12 rounded-lg border-white/[0.08] bg-white/[0.03] pl-4 pr-4 text-sm text-slate-100 placeholder:text-slate-600 focus:border-teal-500/40 focus:ring-1 focus:ring-teal-500/20"
           />
         </div>
 
@@ -130,7 +130,7 @@ export function HeroInput() {
           onClick={() => startHunt()}
           disabled={busy}
           className={cn(
-            "h-10 gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30 hover:brightness-110",
+            "h-10 gap-2 rounded-lg bg-gradient-to-r from-teal-600 to-cyan-600 px-5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition-all hover:shadow-teal-500/30 hover:brightness-110",
             !busy && form.goal.trim() && "animate-pulse-glow"
           )}
         >

@@ -85,7 +85,7 @@ export default function CommandCenterPage() {
           transition={{ duration: 0.4 }}
         >
           <div className="flex items-center gap-3 mb-1">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20">
               <Sparkles className="h-4 w-4 text-primary" />
             </div>
             <div>
@@ -139,11 +139,11 @@ export default function CommandCenterPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
             >
-              <GlassCard className="p-4 border-indigo-500/20 bg-indigo-500/5">
+              <GlassCard className="p-4 border-teal-500/20 bg-teal-500/5">
                 <div className="flex items-center gap-3">
-                  <Loader2 className="h-4 w-4 text-indigo-400 animate-spin" />
+                  <Loader2 className="h-4 w-4 text-teal-400 animate-spin" />
                   <div>
-                    <p className="text-xs font-semibold text-indigo-300">
+                    <p className="text-xs font-semibold text-teal-300">
                       {activeAction === "hunt"
                         ? "Autonomous hunt in progress…"
                         : "Analyzing career options…"}
@@ -242,11 +242,11 @@ export default function CommandCenterPage() {
             disabled={isWorking || !goal.trim()}
           />
           <QuickCard
-            icon={<Sparkles className="h-4 w-4 text-violet-400" />}
+            icon={<Sparkles className="h-4 w-4 text-cyan-400" />}
             title="Career Analysis"
             description="Get AI-powered career path recommendations"
             action="Analyze"
-            gradient="from-violet-500/10 to-purple-500/5"
+            gradient="from-cyan-500/10 to-purple-500/5"
             onClick={() => recommendCareer()}
             disabled={isWorking}
           />

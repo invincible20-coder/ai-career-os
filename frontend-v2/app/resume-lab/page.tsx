@@ -42,8 +42,8 @@ export default function ResumeLabPage() {
       <div className="space-y-6 max-w-6xl mx-auto pb-12">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
           <div className="flex items-center gap-3 mb-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 shadow-[0_0_30px_-5px_rgba(129,140,248,0.3)] border border-indigo-500/20">
-              <BrainCircuit className="h-6 w-6 text-indigo-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 shadow-[0_0_30px_-5px_rgba(20,184,166,0.3)] border border-teal-500/20">
+              <BrainCircuit className="h-6 w-6 text-teal-400" />
             </div>
             <div>
               <h2 className="text-3xl font-bold text-foreground tracking-tight">Intelligence Laboratory</h2>
@@ -66,21 +66,21 @@ export default function ResumeLabPage() {
                   <ResumeUploadZone onUploadStart={handleUploadStart} userId={MOCK_USER_ID} />
                 </div>
                 <div className="space-y-4">
-                  <GlassCard className="p-5 border-indigo-500/20 bg-indigo-500/5">
-                    <h3 className="text-sm font-semibold flex items-center gap-2 text-indigo-300">
+                  <GlassCard className="p-5 border-teal-500/20 bg-teal-500/5">
+                    <h3 className="text-sm font-semibold flex items-center gap-2 text-teal-300">
                       <Target className="h-4 w-4" /> Optimization Benchmarks
                     </h3>
                     <ul className="mt-4 space-y-3 text-xs text-muted-foreground">
                       <li className="flex items-start gap-2">
-                        <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 mt-1 shrink-0" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-teal-500 mt-1 shrink-0" />
                         <span>Compare against top 5% backend engineering resumes</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 mt-1 shrink-0" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-teal-500 mt-1 shrink-0" />
                         <span>Quantifiable impact density modeling</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 mt-1 shrink-0" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-teal-500 mt-1 shrink-0" />
                         <span>Algorithmic formatting analysis</span>
                       </li>
                     </ul>
@@ -110,10 +110,10 @@ export default function ResumeLabPage() {
               className="grid grid-cols-1 lg:grid-cols-3 gap-6"
             >
               <div className="lg:col-span-1 space-y-6">
-                <GlassCard className="p-0 overflow-hidden border-indigo-500/20 bg-gradient-to-b from-indigo-500/5 to-transparent">
+                <GlassCard className="p-0 overflow-hidden border-teal-500/20 bg-gradient-to-b from-teal-500/5 to-transparent">
                   <div className="p-4 border-b border-border/50 bg-surface/50">
                     <h3 className="text-sm font-bold tracking-tight text-foreground flex items-center gap-2">
-                      <Activity className="h-4 w-4 text-indigo-400" /> System Evaluation
+                      <Activity className="h-4 w-4 text-teal-400" /> System Evaluation
                     </h3>
                   </div>
                   <ATSScoreRing
@@ -161,7 +161,7 @@ function MetricBar({ label, value }: { label: string, value: number }) {
       </div>
       <div className="h-1.5 w-full bg-surface-elevated rounded-full overflow-hidden">
         <motion.div 
-          className="h-full bg-indigo-500"
+          className="h-full bg-teal-500"
           initial={{ width: 0 }}
           animate={{ width: `${value}%` }}
           transition={{ duration: 1, delay: 0.5 }}

@@ -82,14 +82,14 @@ const STATUS_ICON: Record<StepStatus, React.ElementType> = {
 
 const STATUS_COLORS: Record<StepStatus, string> = {
   completed: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-  running: "border-indigo-500/30 bg-indigo-500/10 text-indigo-400",
+  running: "border-teal-500/30 bg-teal-500/10 text-teal-400",
   failed: "border-red-500/30 bg-red-500/10 text-red-400",
   pending: "border-white/[0.08] bg-white/[0.03] text-slate-500",
 };
 
 const LINE_COLORS: Record<StepStatus, string> = {
   completed: "bg-emerald-500/40",
-  running: "bg-indigo-500/40",
+  running: "bg-teal-500/40",
   failed: "bg-red-500/40",
   pending: "bg-white/[0.06]",
 };
@@ -123,7 +123,7 @@ export function PlanVisualization() {
         <div className="flex items-center gap-2">
           <div className="relative h-1.5 w-24 rounded-full bg-white/[0.06] overflow-hidden">
             <motion.div
-              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500"
+              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-teal-500 to-emerald-500"
               animate={{ width: `${timeline.progress}%` }}
               transition={{ duration: 0.5, ease: "easeOut" }}
             />
@@ -170,7 +170,7 @@ export function PlanVisualization() {
                     <p className={cn(
                       "text-sm font-semibold",
                       item.status === "completed" ? "text-slate-200" :
-                      item.status === "running" ? "text-indigo-300" :
+                      item.status === "running" ? "text-teal-300" :
                       item.status === "failed" ? "text-red-300" :
                       "text-slate-500"
                     )}>

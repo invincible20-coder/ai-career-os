@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Sidebar } from "./Sidebar";
+import { AnimatePresence } from "framer-motion";
+import { FloatingTopNav } from "@/components/navigation/FloatingTopNav";
 import { TopBar } from "./TopBar";
 import { ContextPanel } from "./ContextPanel";
 
@@ -19,7 +19,6 @@ export function AppShell({
   contextContent,
   showContext = true,
 }: AppShellProps) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
 
   return (
@@ -27,22 +26,16 @@ export function AppShell({
       {/* Ambient gradient background */}
       <div className="gradient-mesh fixed inset-0 pointer-events-none z-0" />
 
-      {/* Left sidebar */}
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
-
-      {/* Center area */}
-      <motion.div
-        initial={false}
-        animate={{
-          marginLeft: sidebarCollapsed ? 68 : 248,
+      {/* Center area — full width now (no sidebar margins) */}
+      <div
+        className="flex-1 flex flex-col min-w-0 relative z-10 transition-[margin] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+        style={{
           marginRight: showContext && contextOpen ? 340 : 0,
         }}
-        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-        className="flex-1 flex flex-col min-w-0 relative z-10"
       >
+        {/* Floating top navigation */}
+        <FloatingTopNav />
+
         <TopBar
           title={title}
           contextOpen={contextOpen}
@@ -51,11 +44,11 @@ export function AppShell({
         />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="max-w-[1200px] mx-auto px-6 py-6">
+          <div className="max-w-[1200px] mx-auto px-6 py-6 pb-24 md:pb-6">
             {children}
           </div>
         </main>
-      </motion.div>
+      </div>
 
       {/* Right context panel */}
       {showContext && (

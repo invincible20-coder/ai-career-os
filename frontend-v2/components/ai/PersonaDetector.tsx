@@ -17,7 +17,7 @@ const CURRENT_PERSONA: Persona = {
   type: "Explorer",
   confidence: 68,
   icon: Crosshair,
-  color: "text-indigo-400",
+  color: "text-teal-400",
   reasons: [
     "Broad interest range detected",
     "No specific role commitment yet",
@@ -48,7 +48,7 @@ export function PersonaDetector() {
 
       {/* Current persona */}
       <div className="flex items-center gap-3 mb-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/10">
           <Icon className={cn("h-5 w-5", CURRENT_PERSONA.color)} />
         </div>
         <div>

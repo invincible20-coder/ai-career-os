@@ -32,8 +32,8 @@ function filterJobs(jobs: Job[], applications: Application[], query: string): Jo
 
 function getInitialColor(name: string): string {
   const colors = [
-    "bg-indigo-500/20 text-indigo-400",
-    "bg-violet-500/20 text-violet-400",
+    "bg-teal-500/20 text-teal-400",
+    "bg-cyan-500/20 text-cyan-400",
     "bg-cyan-500/20 text-cyan-400",
     "bg-emerald-500/20 text-emerald-400",
     "bg-amber-500/20 text-amber-400",
@@ -46,7 +46,7 @@ function getInitialColor(name: string): string {
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "border-white/[0.08] bg-white/[0.03] text-slate-500",
-  prepared: "border-indigo-500/20 bg-indigo-500/10 text-indigo-400",
+  prepared: "border-teal-500/20 bg-teal-500/10 text-teal-400",
   applied: "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
   failed: "border-red-500/20 bg-red-500/10 text-red-400",
 };
@@ -144,7 +144,7 @@ function JobCard({
       className={cn(
         "w-full rounded-lg border p-3 text-left transition-all duration-150",
         isSelected
-          ? "border-indigo-500/30 bg-indigo-500/[0.06]"
+          ? "border-teal-500/30 bg-teal-500/[0.06]"
           : "border-white/[0.04] bg-white/[0.01] hover:border-white/[0.08] hover:bg-white/[0.02]"
       )}
     >
@@ -200,7 +200,7 @@ function JobCard({
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1 text-[10px] font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+            className="flex items-center gap-1 text-[10px] font-medium text-teal-400 hover:text-teal-300 transition-colors"
           >
             <ExternalLink className="h-3 w-3" />
             Apply

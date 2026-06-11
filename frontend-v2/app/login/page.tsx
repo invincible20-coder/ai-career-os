@@ -50,12 +50,12 @@ export default function LoginPage() {
       >
         <div className="text-center mb-8">
           <motion.div 
-            className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 mb-4 animate-pulse-glow"
+            className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 mb-4 animate-pulse-glow"
             initial={{ rotate: -15 }}
             animate={{ rotate: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
-            <Hexagon className="h-8 w-8 text-indigo-400 animate-orb-breathe" />
+            <Hexagon className="h-8 w-8 text-teal-400 animate-orb-breathe" />
           </motion.div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Identity Protocol</h1>
           <p className="text-muted-foreground mt-2 text-sm">Synchronize your professional state</p>
@@ -73,7 +73,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-background/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-foreground placeholder:text-muted-foreground/50 glass-input"
+                  className="w-full pl-10 pr-4 py-3 bg-background/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all text-foreground placeholder:text-muted-foreground/50 glass-input"
                   placeholder="name@example.com"
                   required
                 />
@@ -90,7 +90,7 @@ export default function LoginPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-background/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-foreground placeholder:text-muted-foreground/50 glass-input"
+                  className="w-full pl-10 pr-4 py-3 bg-background/50 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all text-foreground placeholder:text-muted-foreground/50 glass-input"
                   placeholder="••••••••"
                   required
                 />
@@ -100,7 +100,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white rounded-xl text-sm font-semibold shadow-lg shadow-indigo-500/25 transition-all flex justify-center items-center gap-2 group relative overflow-hidden"
+              className="w-full py-3 px-4 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white rounded-xl text-sm font-semibold shadow-lg shadow-teal-500/25 transition-all flex justify-center items-center gap-2 group relative overflow-hidden"
             >
               <span className="relative z-10">{isLoading ? "Synchronizing..." : "Initialize Session"}</span>
               {!isLoading && <Fingerprint className="h-4 w-4 opacity-70 group-hover:opacity-100 transition-opacity relative z-10" />}
@@ -149,7 +149,7 @@ export default function LoginPage() {
               name="Discord" 
               icon={<ShieldCheck className="h-4 w-4" />} 
               onClick={() => signIn("discord")} 
-              glowColor="group-hover:shadow-indigo-500/20"
+              glowColor="group-hover:shadow-teal-500/20"
             />
           </div>
         </GlassCard>

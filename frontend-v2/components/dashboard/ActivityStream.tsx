@@ -17,7 +17,7 @@ const LEVEL_CONFIG: Record<LogLevel, { icon: React.ElementType; color: string; b
   success: { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
   error: { icon: AlertCircle, color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
   warn: { icon: AlertTriangle, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
-  info: { icon: Info, color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20" },
+  info: { icon: Info, color: "text-teal-400", bg: "bg-teal-500/10 border-teal-500/20" },
 };
 
 function formatTime(iso: string): string {

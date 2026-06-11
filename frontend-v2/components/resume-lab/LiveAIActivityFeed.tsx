@@ -154,21 +154,21 @@ export function LiveAIActivityFeed({ userId, onComplete }: LiveAIActivityFeedPro
   }, [userId]);
 
   return (
-    <GlassCard className="p-4 bg-black/40 border-indigo-500/20 backdrop-blur-3xl overflow-hidden relative">
-      <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none"></div>
+    <GlassCard className="p-4 bg-black/40 border-teal-500/20 backdrop-blur-3xl overflow-hidden relative">
+      <div className="absolute inset-0 bg-gradient-to-b from-teal-500/5 to-transparent pointer-events-none"></div>
       
       <div className="flex items-center gap-2 mb-4 border-b border-border/50 pb-2">
-        <Terminal className="h-4 w-4 text-indigo-400" />
-        <h3 className="text-xs font-mono font-semibold text-indigo-300 tracking-wider">AI Execution Stream</h3>
+        <Terminal className="h-4 w-4 text-teal-400" />
+        <h3 className="text-xs font-mono font-semibold text-teal-300 tracking-wider">AI Execution Stream</h3>
         {isListening && (
-          <span className="flex h-2 w-2 rounded-full bg-indigo-500 ml-auto animate-pulse"></span>
+          <span className="flex h-2 w-2 rounded-full bg-teal-500 ml-auto animate-pulse"></span>
         )}
       </div>
 
       <div className="space-y-3 font-mono text-[11px] max-h-[200px] overflow-y-auto scrollbar-thin">
         {events.length === 0 ? (
           <div className="flex items-center gap-2 text-indigo-200">
-            <Activity className="h-3 w-3 text-indigo-400 animate-pulse" />
+            <Activity className="h-3 w-3 text-teal-400 animate-pulse" />
             <span>Connecting to backend execution stream...</span>
           </div>
         ) : (
@@ -186,7 +186,7 @@ export function LiveAIActivityFeed({ userId, onComplete }: LiveAIActivityFeedPro
                 ) : evt.type === 'FAILED' || evt.type === 'TIMEOUT' ? (
                   <Activity className="h-3 w-3 text-red-400" />
                 ) : (
-                  <Activity className="h-3 w-3 text-indigo-400 animate-pulse" />
+                  <Activity className="h-3 w-3 text-teal-400 animate-pulse" />
                 )}
               </div>
               <div className="flex-1">
@@ -196,7 +196,7 @@ export function LiveAIActivityFeed({ userId, onComplete }: LiveAIActivityFeedPro
                 {evt.progress !== undefined && evt.type !== 'COMPLETE' && (
                   <div className="w-full h-1 bg-black/50 rounded-full mt-1.5 overflow-hidden">
                     <motion.div 
-                      className="h-full bg-indigo-500"
+                      className="h-full bg-teal-500"
                       initial={{ width: 0 }}
                       animate={{ width: `${evt.progress}%` }}
                       transition={{ duration: 0.5 }}
@@ -204,7 +204,7 @@ export function LiveAIActivityFeed({ userId, onComplete }: LiveAIActivityFeedPro
                   </div>
                 )}
               </div>
-              <span className="text-indigo-500/50 shrink-0">
+              <span className="text-teal-500/50 shrink-0">
                 {new Date(evt.timestamp).toLocaleTimeString([], { hour12: false, second: '2-digit' })}
               </span>
             </motion.div>

@@ -106,7 +106,7 @@ function JobCard({ job, index, expanded, onToggle, saved, onSave }: { job: JobDa
         <div className="p-4 cursor-pointer" onClick={onToggle}>
           <div className="flex items-start gap-4">
             {/* Company avatar */}
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/15 to-violet-500/10 text-sm font-bold text-primary">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500/15 to-cyan-500/10 text-sm font-bold text-primary">
               {job.company.charAt(0)}
             </div>
 
@@ -188,7 +188,7 @@ function JobCard({ job, index, expanded, onToggle, saved, onSave }: { job: JobDa
                     <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-foreground glass-card !rounded-lg">
                       <FileText className="h-3 w-3" /> Generate Resume
                     </button>
-                    <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white bg-gradient-to-r from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/20">
+                    <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white bg-gradient-to-r from-teal-500 to-cyan-600 shadow-lg shadow-teal-500/20">
                       <Zap className="h-3 w-3" /> Apply Now
                     </button>
                   </div>
@@ -209,7 +209,7 @@ function TrustBadge({ score }: { score: number }) {
 }
 
 function MetricPill({ label, value, color }: { label: string; value: number; color: "indigo" | "violet" }) {
-  const colors = { indigo: "from-indigo-500/15 to-indigo-500/5 text-indigo-400 border-indigo-500/20", violet: "from-violet-500/15 to-violet-500/5 text-violet-400 border-violet-500/20" };
+  const colors = { indigo: "from-teal-500/15 to-teal-500/5 text-teal-400 border-teal-500/20", violet: "from-cyan-500/15 to-cyan-500/5 text-cyan-400 border-cyan-500/20" };
   return (
     <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-md border bg-gradient-to-r", colors[color])}>
       {label} {value}%

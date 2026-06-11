@@ -67,7 +67,7 @@ export default function ChatPage() {
                 disabled={!input.trim() || isStreaming}
                 className={cn(
                   "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-all mb-1",
-                  input.trim() ? "bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/20" : "text-muted-foreground"
+                  input.trim() ? "bg-gradient-to-r from-teal-500 to-cyan-600 text-white shadow-lg shadow-teal-500/20" : "text-muted-foreground"
                 )}
                 style={!input.trim() ? { background: "var(--glass-bg)" } : {}}
               >
@@ -103,9 +103,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       {/* Avatar */}
       <div className={cn(
         "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl",
-        isUser ? "bg-gradient-to-br from-violet-500/20 to-indigo-500/20" : "bg-gradient-to-br from-indigo-500/20 to-cyan-500/20"
+        isUser ? "bg-gradient-to-br from-cyan-500/20 to-teal-500/20" : "bg-gradient-to-br from-teal-500/20 to-cyan-500/20"
       )}>
-        {isUser ? <User className="h-4 w-4 text-violet-400" /> : <Bot className="h-4 w-4 text-primary" />}
+        {isUser ? <User className="h-4 w-4 text-cyan-400" /> : <Bot className="h-4 w-4 text-primary" />}
       </div>
 
       {/* Content */}
@@ -123,7 +123,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         {message.memory && message.memory.length > 0 && !isUser && (
           <div className="flex flex-wrap gap-1 mb-2">
             {message.memory.map((m) => (
-              <span key={m} className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-400 border border-violet-500/20">
+              <span key={m} className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                 🧠 {m}
               </span>
             ))}
@@ -145,7 +145,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         {/* Message body */}
         <GlassCard className={cn(
           "p-4 !rounded-2xl",
-          isUser ? "!rounded-tr-md bg-gradient-to-br from-indigo-500/10 to-violet-500/5" : "!rounded-tl-md"
+          isUser ? "!rounded-tr-md bg-gradient-to-br from-teal-500/10 to-cyan-500/5" : "!rounded-tl-md"
         )}>
           <div className="prose prose-sm prose-invert max-w-none text-sm text-foreground leading-relaxed">
             <MarkdownContent content={message.content} />
@@ -171,7 +171,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         )}
 
         {/* Timestamp */}
-        <span className="text-[10px] text-muted-foreground mt-1 block">
+        <span className="text-[10px] text-muted-foreground mt-1 block" suppressHydrationWarning>
           {new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </span>
       </div>
@@ -226,7 +226,7 @@ function ThinkingIndicator() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-cyan-500/20">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20">
         <Bot className="h-4 w-4 text-primary animate-pulse" />
       </div>
       <GlassCard className="p-3 !rounded-2xl !rounded-tl-md">
@@ -260,7 +260,7 @@ function ChatContext({ intent }: { intent: { type: string; confidence: number; l
             <p className="text-sm font-semibold text-foreground">{intent.label}</p>
             <p className="text-[11px] text-muted-foreground mt-1">Confidence: {intent.confidence}%</p>
             <div className="h-1 rounded-full mt-2 overflow-hidden" style={{ background: "var(--glass-bg-elevated)" }}>
-              <motion.div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" animate={{ width: `${intent.confidence}%` }} transition={{ duration: 0.8 }} />
+              <motion.div className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500" animate={{ width: `${intent.confidence}%` }} transition={{ duration: 0.8 }} />
             </div>
           </div>
         ) : (

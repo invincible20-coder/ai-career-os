@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Sun, Moon, Monitor, PanelRightOpen, PanelRightClose, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,11 @@ export function TopBar({
   showContextToggle = true,
 }: TopBarProps) {
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const cycleTheme = () => {
     const idx = THEME_CYCLE.indexOf(theme);
@@ -34,7 +40,9 @@ export function TopBar({
     setTheme(next);
   };
 
-  const ThemeIcon = THEME_ICONS[theme];
+  // Use a stable fallback before mount to avoid hydration mismatch
+  const ThemeIcon = mounted ? THEME_ICONS[theme] : Monitor;
+  const themeLabel = mounted ? `Theme: ${theme}` : "Theme";
 
   return (
     <header
@@ -66,14 +74,15 @@ export function TopBar({
           onClick={cycleTheme}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all hover:text-foreground"
           style={{ background: "var(--glass-bg)" }}
-          title={`Theme: ${theme}`}
+          title={themeLabel}
+          suppressHydrationWarning
         >
           <motion.div
-            key={theme}
+            key={mounted ? theme : "initial"}
             initial={{ rotate: -30, opacity: 0, scale: 0.8 }}
             animate={{ rotate: 0, opacity: 1, scale: 1 }}
             exit={{ rotate: 30, opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.1 }}
           >
             <ThemeIcon className="h-3.5 w-3.5" />
           </motion.div>

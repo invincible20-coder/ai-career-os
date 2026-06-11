@@ -54,7 +54,7 @@ export function ContentViewer() {
           <select
             value={selectedJobId}
             onChange={(e) => selectJob(e.target.value)}
-            className="w-full h-8 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 text-xs text-slate-300 outline-none focus:border-indigo-500/40"
+            className="w-full h-8 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 text-xs text-slate-300 outline-none focus:border-teal-500/40"
           >
             {jobs.map((job) => (
               <option key={job.job_id} value={job.job_id}>
@@ -71,14 +71,14 @@ export function ContentViewer() {
           <TabsList className="h-8 bg-white/[0.03] border border-white/[0.06] rounded-lg p-0.5">
             <TabsTrigger
               value="resume"
-              className="h-7 gap-1.5 rounded-md text-xs data-[state=active]:bg-indigo-500/20 data-[state=active]:text-indigo-300"
+              className="h-7 gap-1.5 rounded-md text-xs data-[state=active]:bg-teal-500/20 data-[state=active]:text-teal-300"
             >
               <FileText className="h-3 w-3" />
               Resume
             </TabsTrigger>
             <TabsTrigger
               value="cover"
-              className="h-7 gap-1.5 rounded-md text-xs data-[state=active]:bg-indigo-500/20 data-[state=active]:text-indigo-300"
+              className="h-7 gap-1.5 rounded-md text-xs data-[state=active]:bg-teal-500/20 data-[state=active]:text-teal-300"
             >
               <Mail className="h-3 w-3" />
               Cover Letter

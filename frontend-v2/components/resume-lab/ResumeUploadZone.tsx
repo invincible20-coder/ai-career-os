@@ -80,14 +80,14 @@ export function ResumeUploadZone({ onUploadStart, userId }: ResumeUploadZoneProp
           {...getRootProps()} 
           className={`
             relative overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-300 ease-out
-            ${isDragActive ? 'border-indigo-500 bg-indigo-500/5 shadow-[0_0_30px_-5px_rgba(129,140,248,0.2)]' : 'border-border hover:border-indigo-500/50 hover:bg-surface'}
+            ${isDragActive ? 'border-teal-500 bg-teal-500/5 shadow-[0_0_30px_-5px_rgba(20,184,166,0.2)]' : 'border-border hover:border-teal-500/50 hover:bg-surface'}
           `}
         >
           <input {...getInputProps()} />
           <div className="p-10 text-center flex flex-col items-center justify-center">
             <motion.div
               animate={{ y: isDragActive ? -5 : 0, scale: isDragActive ? 1.1 : 1 }}
-              className={`h-16 w-16 rounded-2xl flex items-center justify-center mb-4 transition-colors ${isDragActive ? 'bg-indigo-500/20 text-indigo-400' : 'bg-surface-elevated text-muted-foreground'}`}
+              className={`h-16 w-16 rounded-2xl flex items-center justify-center mb-4 transition-colors ${isDragActive ? 'bg-teal-500/20 text-teal-400' : 'bg-surface-elevated text-muted-foreground'}`}
             >
               <UploadCloud className="h-8 w-8" />
             </motion.div>
@@ -102,8 +102,8 @@ export function ResumeUploadZone({ onUploadStart, userId }: ResumeUploadZoneProp
       ) : (
         <GlassCard className="p-6 relative overflow-hidden">
           <div className="flex items-center gap-4 relative z-10">
-            <div className="h-12 w-12 bg-indigo-500/10 rounded-xl flex items-center justify-center shrink-0">
-              <File className="h-6 w-6 text-indigo-400" />
+            <div className="h-12 w-12 bg-teal-500/10 rounded-xl flex items-center justify-center shrink-0">
+              <File className="h-6 w-6 text-teal-400" />
             </div>
             <div className="flex-1 min-w-0">
               <h4 className="text-sm font-semibold text-foreground truncate">{file.name}</h4>
@@ -120,7 +120,7 @@ export function ResumeUploadZone({ onUploadStart, userId }: ResumeUploadZoneProp
           <div className="mt-6">
             <button
               onClick={handleUpload}
-              className="w-full py-3 px-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-sm font-semibold transition-all shadow-[0_0_20px_-5px_rgba(129,140,248,0.4)] hover:shadow-[0_0_30px_-5px_rgba(129,140,248,0.6)]"
+              className="w-full py-3 px-4 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-semibold transition-all shadow-[0_0_20px_-5px_rgba(20,184,166,0.4)] hover:shadow-[0_0_30px_-5px_rgba(20,184,166,0.6)]"
             >
               Begin Intelligence Analysis
             </button>

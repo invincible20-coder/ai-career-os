@@ -27,7 +27,7 @@ const EVENTS: TimelineEvent[] = [
 ];
 
 const TYPE_COLORS = {
-  learn: "bg-violet-500",
+  learn: "bg-cyan-500",
   adapt: "bg-primary",
   discover: "bg-emerald-500",
 };

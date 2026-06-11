@@ -55,7 +55,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     >
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 px-4" style={{ borderBottom: "1px solid var(--glass-border)" }}>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/20">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 shadow-lg shadow-teal-500/20">
           <Zap className="h-4.5 w-4.5 text-white" />
         </div>
         <AnimatePresence>
@@ -165,7 +165,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
           <div className="h-1 rounded-full overflow-hidden" style={{ background: "var(--glass-bg-elevated)" }}>
             <motion.div
-              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+              className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500"
               initial={{ width: 0 }}
               animate={{ width: "34%" }}
               transition={{ duration: 1, ease: "easeOut", delay: 0.5 }}
@@ -178,7 +178,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="px-2 py-3" style={{ borderTop: "1px solid var(--glass-border)" }}>
         {/* User Identity */}
         <div className={cn("flex items-center gap-3 rounded-xl px-3 py-2 mb-1", !collapsed && "")}>
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/20 to-indigo-500/20 text-xs font-bold text-primary">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500/20 to-teal-500/20 text-xs font-bold text-primary">
             S
           </div>
           <AnimatePresence>

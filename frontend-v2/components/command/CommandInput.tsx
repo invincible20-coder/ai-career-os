@@ -111,7 +111,7 @@ export function CommandInput({
               className={cn(
                 "flex h-10 w-10 items-center justify-center rounded-xl transition-all",
                 value.trim()
-                  ? "bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/25"
+                  ? "bg-gradient-to-r from-teal-500 to-cyan-600 text-white shadow-lg shadow-teal-500/25"
                   : "text-muted-foreground"
               )}
               style={!value.trim() ? { background: "var(--glass-bg-elevated)" } : {}}
