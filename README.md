@@ -1,6 +1,6 @@
 # 🤖 Autonomous Job Hunt AI Agent
 
-Production-grade FastAPI backend for an **AI-powered autonomous job hunting agent**. The system follows an agentic loop — **Goal → Plan → Act → Observe → Repeat** — to search for jobs, tailor resumes & cover letters, prepare applications, and track their status, all orchestrated through a single API call. It also includes a structured **Career Recommendation Feature** for users who are unsure which role to pursue.
+This is a Python based FastAPI backend for an **AI-powered autonomous job hunting agent**. The system follows an agentic loop — **Goal → Plan → Act → Observe → Repeat** — to search for jobs, tailor resumes & cover letters, prepare applications, and track their status, all orchestrated through a single API call. It also includes a structured **Career Recommendation Feature** for users who are unsure which role to pursue and uses the *React and Nodejs* for frontend of the project.
 
 Built with request-safe concurrency, SQL-backed persistence, strict plan validation, structured error reporting, and retry-aware step execution.
 
