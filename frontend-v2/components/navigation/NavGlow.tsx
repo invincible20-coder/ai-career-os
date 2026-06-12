@@ -1,33 +1,41 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { motion, useMotionValue, useTransform, useSpring } from "framer-motion";
 
 /**
  * Cursor-reactive ambient glow layer rendered inside the floating nav.
- * A radial gradient follows the mouse X position across the navbar
- * for an intelligent lighting effect.
+ * Tracks global pointer coordinates scoped over the bounding parent 
+ * layout element to prevent pointer-event deadlocks.
  */
 export function NavGlow() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(0.5); // normalized 0–1
 
   const smoothX = useSpring(mouseX, { stiffness: 150, damping: 20 });
-
-  // Map normalized X to percentage for gradient position
   const gradientX = useTransform(smoothX, [0, 1], ["0%", "100%"]);
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const normalized = (e.clientX - rect.left) / rect.width;
-    mouseX.set(Math.max(0, Math.min(1, normalized)));
-  };
+  useEffect(() => {
+    // Find the actual interactive navbar element
+    const parentNavbar = containerRef.current?.parentElement;
+    if (!parentNavbar) return;
+
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      const rect = parentNavbar.getBoundingClientRect();
+      const normalized = (e.clientX - rect.left) / rect.width;
+      
+      // Clamp values strictly between 0 and 1
+      mouseX.set(Math.max(0, Math.min(1, normalized)));
+    };
+
+    // Attach tracking directly to the parent layout element
+    parentNavbar.addEventListener("mousemove", handleGlobalMouseMove);
+    return () => parentNavbar.removeEventListener("mousemove", handleGlobalMouseMove);
+  }, [mouseX]);
 
   return (
     <motion.div
       ref={containerRef}
-      onMouseMove={handleMouseMove}
       className="absolute inset-0 overflow-hidden rounded-[inherit] pointer-events-none"
       aria-hidden
     >
