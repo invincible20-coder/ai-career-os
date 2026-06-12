@@ -39,21 +39,11 @@ const NAV_ITEMS: NavItemData[] = [
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
-/**
- * Floating Adaptive Top Navigation System
- *
- * A context-aware floating command navigation layer that:
- * - Remains hidden by default
- * - Reveals when user moves cursor near top, scrolls up, or returns focus
- * - Features multi-layer glass material with cursor-reactive lighting
- * - Auto-hides after idle period
- */
 export function FloatingTopNav() {
   const pathname = usePathname();
   const { isVisible } = useNavVisibility();
   const navRef = useRef<HTMLDivElement>(null);
 
-  // Notify the visibility hook when we're being hovered
   const handleMouseEnter = useCallback(() => {
     const setter = (window as unknown as Record<string, unknown>)
       .__setNavHovering as ((v: boolean) => void) | undefined;
@@ -68,7 +58,7 @@ export function FloatingTopNav() {
 
   return (
     <>
-      {/* ── Ambient top-edge glow (always visible, subtle) ── */}
+      {/* ── Ambient top-edge glow ── */}
       <div
         className="absolute top-0 inset-x-0 h-[2px] z-[60] pointer-events-none"
         style={{
@@ -101,8 +91,11 @@ export function FloatingTopNav() {
             }}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
-            className="absolute top-4 left-1/2 z-[55] hidden md:flex items-center"
-            style={{ transform: "translateX(-50%)" }}
+            /* 
+              🌟 FIXED LAYOUT CLASS: Changed from 'absolute top-3 z-[55]' to 'relative'.
+              This drops any manual offsets so it aligns perfectly to the parent container center!
+            */
+            className="relative hidden md:flex items-center"
           >
             {/* ── Glass capsule container ── */}
             <motion.div

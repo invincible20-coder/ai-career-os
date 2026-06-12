@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Sun, Moon, Monitor, PanelRightOpen, PanelRightClose, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme/ThemeProvider";
+import { FloatingTopNav } from "../navigation/FloatingTopNav";
 
 interface TopBarProps {
   title: string;
@@ -40,31 +41,43 @@ export function TopBar({
     setTheme(next);
   };
 
-  // Use a stable fallback before mount to avoid hydration mismatch
   const ThemeIcon = mounted ? THEME_ICONS[theme] : Monitor;
   const themeLabel = mounted ? `Theme: ${theme}` : "Theme";
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-14 items-center justify-between px-6 glass-panel-elevated"
+      /* Added 'relative' so absolute child centering references this container width */
+      className="sticky top-0 z-30 flex h-14 items-center justify-between px-6 glass-panel-elevated relative"
       style={{
         borderBottom: "1px solid var(--glass-border)",
         borderRadius: 0,
       }}
     >
+      {/* Left Title Section */}
       <div className="flex items-center gap-4">
         <h1 className="text-sm font-semibold text-foreground">{title}</h1>
       </div>
 
-      <div className="flex items-center gap-1.5">
-        {/* Search trigger */}
+      {/* ── PERFECT DYNAMIC CENTER POINT ── */}
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none">
+        <div className="pointer-events-auto">
+          <FloatingTopNav />
+        </div>
+      </div>
+
+      {/* Right Controls Section */}
+      <div className="flex items-center gap-1.5 z-10">
+        {/* Search Bar */}
         <button
           className="flex h-8 items-center gap-2 rounded-lg px-3 text-xs text-muted-foreground transition-all hover:text-foreground"
           style={{ background: "var(--glass-bg)" }}
         >
           <Search className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Search</span>
-          <kbd className="hidden sm:inline-flex h-5 items-center rounded border px-1.5 font-mono text-[10px] text-muted-foreground" style={{ borderColor: "var(--glass-border)" }}>
+          <kbd
+            className="hidden sm:inline-flex h-5 items-center rounded border px-1.5 font-mono text-[10px] text-muted-foreground"
+            style={{ borderColor: "var(--glass-border)" }}
+          >
             ⌘K
           </kbd>
         </button>

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { FloatingTopNav } from "@/components/navigation/FloatingTopNav";
 import { TopBar } from "./TopBar";
 import { ContextPanel } from "./ContextPanel";
 
@@ -26,15 +25,14 @@ export function AppShell({
       {/* Ambient gradient background */}
       <div className="gradient-mesh fixed inset-0 pointer-events-none z-0" />
 
-      {/* Center area — full width now (no sidebar margins) */}
+      {/* Center area — shifts width automatically when sidebar toggles */}
       <div
         className="flex-1 flex flex-col min-w-0 relative z-10 transition-[margin] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
         style={{
           marginRight: showContext && contextOpen ? 340 : 0,
         }}
       >
-        {/* Floating top navigation */}
-        <FloatingTopNav />
+        {/* Floating Top Nav removed from here to prevent duplicate */}
 
         <TopBar
           title={title}
