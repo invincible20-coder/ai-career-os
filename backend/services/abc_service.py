@@ -26,6 +26,10 @@ from backend.models.abc import (
     RecommendationEvent,
     UserStrategyProfile,
 )
+from backend.models.abc_intelligence import (
+    ConsequenceLevel,
+    consequence_weight_for,
+)
 from backend.models.career import UserProfile
 from backend.models.errors import ErrorDetail
 from backend.models.job import Job
@@ -60,12 +64,22 @@ logger = get_logger(__name__)
 
 @dataclass(slots=True)
 class ABCAdaptiveService:
-    """Closed-loop A -> B -> C -> strategy update -> re-ranking engine."""
+    """Closed-loop A -> B -> C -> strategy update -> re-ranking engine.
+
+    V2.0 enhancements: immutable event store, dual memory, semantic similarity,
+    pattern discovery, consequence weighting, exploration/exploitation,
+    career persona alignment, and enhanced explainability.
+    """
 
     repository: HuntRepository
     confidence_service: ConfidenceService | None = None
     discovery_service: CareerDiscoveryService | None = None
     event_bus: EventBus | None = None
+    # V2 optional service dependencies (injected when available)
+    memory_service: object | None = None
+    pattern_service: object | None = None
+    semantic_service: object | None = None
+    persona_service: object | None = None
 
     async def rank_jobs(
         self,
@@ -144,13 +158,107 @@ class ABCAdaptiveService:
             trust_penalty = round((1 - trust_score) * 0.10 + min(0.10, len(job.scam_flags) * 0.03), 4)
             previous_score, exposure_count = history.get(job.job_id, (base_score, 0))
             repetition_penalty = self._repetition_penalty(exposure_count)
-            learned_score = (
-                base_score * 0.35
-                + behavior_score * 0.25
-                + outcome_score * 0.25
-                + category_weight * 0.15
-            )
+
+            # V2: Compute additional intelligence signals
+            semantic_score = 0.0
+            pattern_score = 0.0
+            temporal_score = base_score
+            memory_score = 0.0
+            persona_alignment_val = 0.5
+            v2_signal_count = 0  # Require ≥2 V2 signals before switching formula
+            job_signature = self._build_job_signature(job)
+
+            if self.semantic_service is not None:
+                try:
+                    successful_sigs = []
+                    if self.pattern_service is not None:
+                        top_patterns = await self.pattern_service.get_top_patterns(
+                            user_id, min_confidence=0.3, limit=10,
+                        )
+                        successful_sigs = [p.antecedent_signature for p in top_patterns]
+                    if successful_sigs:
+                        semantic_score = self.semantic_service.semantic_score_for_job(
+                            job_signature, successful_sigs,
+                        )
+                        v2_signal_count += 1
+                except Exception:
+                    pass
+
+            if self.pattern_service is not None:
+                try:
+                    top_patterns = await self.pattern_service.get_top_patterns(
+                        user_id, min_confidence=0.2, limit=15,
+                    )
+                    if top_patterns:
+                        pattern_score = self.pattern_service.pattern_score_for_job(
+                            top_patterns, category, job_signature,
+                        )
+                        v2_signal_count += 1
+                except Exception:
+                    pass
+
+            if self.memory_service is not None:
+                try:
+                    memory_state = await self.memory_service.get_memory_state(user_id)
+                    has_memory = bool(
+                        memory_state.short_term.recent_interests
+                        or memory_state.short_term.recent_applications
+                        or memory_state.long_term.stable_preferences
+                        or memory_state.long_term.successful_patterns
+                    )
+                    if has_memory:
+                        job_keywords = self._terms(
+                            " ".join([job.title, job.description, " ".join(job.requirements)])
+                        )
+                        memory_score = self.memory_service.memory_influenced_score(
+                            memory_state, category, job_keywords,
+                        )
+                        v2_signal_count += 1
+                except Exception:
+                    pass
+
+            if self.persona_service is not None:
+                try:
+                    persona = await self.persona_service.get_persona(user_id)
+                    if persona.persona_confidence > 0.1:
+                        persona_alignment_val = self.persona_service.persona_alignment_score(
+                            persona, category,
+                        )
+                        v2_signal_count += 1
+                except Exception:
+                    pass
+
+            # Ranking formula: V2 progressively blends in as data accumulates.
+            # When V2 has insufficient data (<2 signal sources), falls back to V1 formula.
+            if v2_signal_count >= 2:
+                v2_behavioral = behavior_score * 0.5 + memory_score * 0.3 + persona_alignment_val * 0.2
+                exploration_score_val = self._exploration_bonus(category, discovery, confidence_score)
+                learned_score = (
+                    v2_behavioral * 0.30
+                    + semantic_score * 0.20
+                    + outcome_score * 0.20
+                    + base_score * 0.15
+                    + confidence_score * 0.10
+                    + exploration_score_val * 0.05
+                )
+            else:
+                # V1 formula (backward compatible)
+                learned_score = (
+                    base_score * 0.35
+                    + behavior_score * 0.25
+                    + outcome_score * 0.25
+                    + category_weight * 0.15
+                )
             confidence_blended_score = base_score * (1 - aggressiveness) + learned_score * aggressiveness
+            # Use V2 exploration when we have data, else V1
+            if v2_signal_count >= 2:
+                exploration_bonus = self._v2_exploration_bonus(
+                    category, discovery, confidence_score, pattern_score,
+                )
+            else:
+                exploration_bonus = self._exploration_bonus(
+                    category, discovery, confidence_score,
+                )
             raw_score = max(
                 0.0,
                 min(1.0, confidence_blended_score + exploration_bonus - repetition_penalty),
@@ -209,9 +317,18 @@ class ABCAdaptiveService:
                         "exploration_bonus": exploration_bonus,
                         "repetition_penalty": repetition_penalty,
                         "trust_penalty": trust_penalty,
+                        "semantic_score": semantic_score,
+                        "pattern_score": pattern_score,
+                        "memory_score": memory_score,
+                        "persona_alignment": persona_alignment_val,
                     },
                     strategy_weights=category_weights,
                     filters=filters,
+                    semantic_score=semantic_score,
+                    pattern_score=pattern_score,
+                    temporal_score=base_score,
+                    memory_score=memory_score,
+                    persona_alignment=persona_alignment_val,
                 )
             )
 
@@ -358,6 +475,37 @@ class ABCAdaptiveService:
         )
         await self.repository.save_outcome_event(event)
         await self.refresh_strategy_profile(behavior.user_id)
+
+        # V2: Write to immutable learning event store
+        await self._write_learning_event(
+            behavior=behavior,
+            outcome_event=event,
+        )
+
+        # V2: Update dual memory with outcome signal
+        if self.memory_service is not None:
+            try:
+                consequence_level = self._map_outcome_to_consequence(event.outcome_type.value)
+                if consequence_level in (
+                    ConsequenceLevel.INTERVIEW.value,
+                    ConsequenceLevel.OFFER.value,
+                    ConsequenceLevel.ACCEPTED.value,
+                ):
+                    await self.memory_service.update_long_term(
+                        behavior.user_id,
+                        successful_pattern=behavior.category,
+                        category=behavior.category,
+                    )
+            except Exception:
+                pass
+
+        # V2: Evolve persona after new outcome
+        if self.persona_service is not None:
+            try:
+                await self.persona_service.evolve_persona(behavior.user_id)
+            except Exception:
+                pass
+
         await self._publish(
             behavior.session_id,
             {
@@ -922,3 +1070,159 @@ class ABCAdaptiveService:
         if self.event_bus is None:
             return
         await self.event_bus.publish(channel, payload)
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # V2 Behavioral Intelligence Helper Methods
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    async def _write_learning_event(
+        self,
+        behavior: BehaviorEventRecord,
+        outcome_event: OutcomeEvent | None = None,
+    ) -> None:
+        """Write a unified learning event to the immutable store."""
+        try:
+            antecedent = await self.repository.get_recommendation_event_record(
+                behavior.antecedent_event_id,
+            )
+        except Exception:
+            return
+
+        consequence_level = ConsequenceLevel.VIEWED.value
+        consequence_weight_val = consequence_weight_for(consequence_level)
+        outcome_id = None
+        outcome_type = None
+        response_time_days = 0.0
+
+        if outcome_event is not None:
+            outcome_id = outcome_event.outcome_id
+            outcome_type = outcome_event.outcome_type.value
+            consequence_level = self._map_outcome_to_consequence(outcome_type)
+            consequence_weight_val = consequence_weight_for(consequence_level)
+            response_time_days = outcome_event.response_time_days
+        else:
+            consequence_level = self._map_behavior_to_consequence(behavior.event_type)
+            consequence_weight_val = consequence_weight_for(consequence_level)
+
+        signature = " + ".join(filter(None, [
+            (antecedent.category or "").strip(),
+            " ".join(antecedent.filters_json.get("requirements", [])[:3]) if antecedent.filters_json else "",
+        ]))
+
+        now = utc_now()
+        strategy = await self.repository.get_user_strategy_profile(behavior.user_id)
+        strategy_snapshot = strategy.category_weights if strategy else {}
+
+        try:
+            await self.repository.save_abc_learning_event(
+                event_id=str(uuid.uuid4()),
+                user_id=behavior.user_id,
+                timestamp=now,
+                job_id=antecedent.job_id or "",
+                job_title="",
+                job_company="",
+                job_category=antecedent.category or "",
+                job_location="",
+                job_requirements=[],
+                goal="",
+                hunt_id=antecedent.hunt_id or "",
+                session_id=behavior.session_id or "",
+                base_match_score=antecedent.base_match_score or 0.0,
+                ranking_position=antecedent.rank_position or 0,
+                recommendation_reason=antecedent.recommendation_reason or "",
+                antecedent_signature=signature,
+                behavior_event_id=behavior.id,
+                behavior_event_type=behavior.event_type,
+                resume_id=behavior.resume_id,
+                outcome_id=outcome_id,
+                outcome_type=outcome_type,
+                consequence_level=consequence_level,
+                consequence_weight=consequence_weight_val,
+                response_time_days=response_time_days,
+                confidence_at_time=0.0,
+                strategy_snapshot=strategy_snapshot,
+            )
+        except Exception:
+            logger.warning("Failed to write learning event for behavior %s", behavior.id)
+
+    @staticmethod
+    def _map_outcome_to_consequence(outcome_type: str) -> str:
+        """Map OutcomeType values to ConsequenceLevel values."""
+        mapping = {
+            OutcomeType.NO_RESPONSE.value: ConsequenceLevel.IGNORED.value,
+            OutcomeType.REJECTION.value: ConsequenceLevel.APPLIED.value,
+            OutcomeType.ASSESSMENT.value: ConsequenceLevel.ASSESSMENT.value,
+            OutcomeType.INTERVIEW.value: ConsequenceLevel.INTERVIEW.value,
+            OutcomeType.FINAL_ROUND.value: ConsequenceLevel.FINAL_ROUND.value,
+            OutcomeType.OFFER.value: ConsequenceLevel.OFFER.value,
+            OutcomeType.ACCEPTED.value: ConsequenceLevel.ACCEPTED.value,
+            OutcomeType.FOLLOW_UP_REQUESTED.value: ConsequenceLevel.APPLIED.value,
+        }
+        return mapping.get(outcome_type, ConsequenceLevel.VIEWED.value)
+
+    @staticmethod
+    def _map_behavior_to_consequence(behavior_type: str) -> str:
+        """Map BehaviorEventType to ConsequenceLevel."""
+        mapping = {
+            BehaviorEventType.VIEW.value: ConsequenceLevel.VIEWED.value,
+            BehaviorEventType.CLICK.value: ConsequenceLevel.CLICKED.value,
+            BehaviorEventType.SAVE.value: ConsequenceLevel.SAVED.value,
+            BehaviorEventType.APPLY.value: ConsequenceLevel.APPLIED.value,
+            BehaviorEventType.IGNORE.value: ConsequenceLevel.IGNORED.value,
+            BehaviorEventType.ABANDON.value: ConsequenceLevel.IGNORED.value,
+        }
+        return mapping.get(behavior_type, ConsequenceLevel.VIEWED.value)
+
+    @staticmethod
+    def _v2_exploration_bonus(
+        category: str,
+        discovery,
+        confidence_score: float,
+        pattern_score: float,
+    ) -> float:
+        """80/20 exploration/exploitation: 20% of the bonus goes to exploration."""
+        if discovery is None or not discovery.career_paths:
+            return 0.0
+        discovered = next(
+            (path for path in discovery.career_paths if path.category == category),
+            None,
+        )
+        if discovered is None:
+            return 0.0
+        # Scale exploration inversely with pattern confidence
+        exploration_weight = max(0.0, 1 - pattern_score) * 0.20
+        return round((1 - confidence_score) * discovered.score * exploration_weight, 4)
+
+    @staticmethod
+    def _build_job_signature(job: Job) -> str:
+        """Build a canonical signature for a job."""
+        import re
+        parts = []
+        location_lower = job.location.lower() if job.location else ""
+        if "remote" in location_lower:
+            parts.append("remote")
+        elif job.location and job.location.strip():
+            parts.append(job.location.strip().split(",")[0].strip().lower())
+
+        if job.job_category:
+            parts.append(job.job_category.lower())
+
+        title_tokens = re.findall(r"[a-z0-9]+", job.title.lower()) if job.title else []
+        stop_words = {"senior", "junior", "lead", "staff", "principal", "engineer", "developer"}
+        parts.extend(t for t in title_tokens if t not in stop_words and len(t) > 1)
+
+        for req in (job.requirements or [])[:4]:
+            parts.append(req.lower().strip())
+
+        return " + ".join(dict.fromkeys(parts))
+
+    @staticmethod
+    def _terms(text: str) -> set[str]:
+        """Extract lowercase keyword terms from text."""
+        import re
+        stop_words = {
+            "and", "the", "for", "with", "a", "an", "in", "of", "to",
+            "is", "are", "or", "on", "at", "by", "it", "we", "you",
+        }
+        tokens = re.findall(r"[a-z0-9]+", text.lower())
+        return {t for t in tokens if t not in stop_words and len(t) > 1}

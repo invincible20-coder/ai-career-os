@@ -370,6 +370,102 @@ async def get_predictive_career_profile(
     return ResponseEnvelope(success=True, data=profile.model_dump(mode="json"), errors=[])
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# V2 Behavioral Intelligence Endpoints
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+@router.get("/abc/analytics", response_model=ResponseEnvelope, tags=["behavioral-intelligence"])
+async def get_abc_analytics(
+    request: Request,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    """Full behavioral intelligence analytics report."""
+    result = await service.get_abc_analytics(_user_key(request, user_id))
+    return ResponseEnvelope(
+        success=True,
+        data=result.model_dump(mode="json") if result else None,
+        errors=[],
+    )
+
+
+@router.get("/abc/patterns", response_model=ResponseEnvelope, tags=["behavioral-intelligence"])
+async def get_abc_patterns(
+    request: Request,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    """Discovered behavioral patterns."""
+    result = await service.get_abc_patterns(_user_key(request, user_id))
+    return ResponseEnvelope(
+        success=True,
+        data=[p.model_dump(mode="json") for p in result] if result else [],
+        errors=[],
+    )
+
+
+@router.get("/abc/persona", response_model=ResponseEnvelope, tags=["behavioral-intelligence"])
+async def get_abc_persona(
+    request: Request,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    """Current inferred career persona."""
+    result = await service.get_abc_persona(_user_key(request, user_id))
+    return ResponseEnvelope(
+        success=True,
+        data=result.model_dump(mode="json") if result else None,
+        errors=[],
+    )
+
+
+@router.get("/abc/memory", response_model=ResponseEnvelope, tags=["behavioral-intelligence"])
+async def get_abc_memory(
+    request: Request,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    """Dual memory state (short-term + long-term)."""
+    result = await service.get_abc_memory(_user_key(request, user_id))
+    return ResponseEnvelope(
+        success=True,
+        data=result.model_dump(mode="json") if result else None,
+        errors=[],
+    )
+
+
+@router.get("/abc/self-evaluation", response_model=ResponseEnvelope, tags=["behavioral-intelligence"])
+async def get_abc_self_evaluation(
+    request: Request,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    """Engine quality self-evaluation metrics."""
+    result = await service.get_abc_self_evaluation(_user_key(request, user_id))
+    return ResponseEnvelope(
+        success=True,
+        data=result.model_dump(mode="json") if result else None,
+        errors=[],
+    )
+
+
+@router.post("/abc/strategy-feedback", response_model=ResponseEnvelope, tags=["behavioral-intelligence"])
+async def get_abc_strategy_feedback(
+    request: Request,
+    user_id: str | None = Query(default=None),
+    service: HuntService = Depends(get_hunt_service),
+) -> ResponseEnvelope:
+    """Trigger strategy adjustment from ABC behavioral signals."""
+    result = await service.get_abc_strategy_feedback(_user_key(request, user_id))
+    return ResponseEnvelope(
+        success=True,
+        data=[s.model_dump(mode="json") for s in result] if result else [],
+        errors=[],
+    )
+
+
+
 def _user_key(request: Request, user_id: str | None = None) -> str:
     if user_id and user_id.strip():
         return user_id.strip()

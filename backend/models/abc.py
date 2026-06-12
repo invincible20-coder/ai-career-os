@@ -33,8 +33,11 @@ class OutcomeType(str, Enum):
 
     NO_RESPONSE = "no_response"
     REJECTION = "rejection"
+    ASSESSMENT = "assessment"
     INTERVIEW = "interview"
+    FINAL_ROUND = "final_round"
     OFFER = "offer"
+    ACCEPTED = "accepted"
     FOLLOW_UP_REQUESTED = "follow_up_requested"
 
 
@@ -167,6 +170,12 @@ class RankedJob(BaseModel):
     signal_breakdown: dict[str, float] = Field(default_factory=dict)
     strategy_weights: dict[str, float] = Field(default_factory=dict)
     filters: dict[str, Any] = Field(default_factory=dict)
+    # V2 Behavioral Intelligence fields
+    semantic_score: float = 0.0
+    pattern_score: float = 0.0
+    temporal_score: float = 0.0
+    memory_score: float = 0.0
+    persona_alignment: float = 0.5
 
 
 class RankJobsRequest(BaseModel):

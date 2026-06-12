@@ -469,3 +469,193 @@ class RateLimitRecord(Base):
         default=utc_now,
         nullable=False,
     )
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ABC Behavioral Intelligence Engine V2.0 Records
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+class ABCLearningEventRecord(Base):
+    """Immutable, append-only learning event: Antecedent → Behavior → Consequence.
+
+    This is the historical truth source. Events are never updated or deleted.
+    """
+
+    __tablename__ = "abc_learning_events"
+    __table_args__ = (
+        Index("ix_abc_learning_events_user_ts", "user_id", "timestamp"),
+        Index("ix_abc_learning_events_user_cat", "user_id", "job_category"),
+        Index("ix_abc_learning_events_signature", "antecedent_signature"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    # Antecedent fields
+    job_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    job_title: Mapped[str] = mapped_column(String(255), nullable=False)
+    job_company: Mapped[str] = mapped_column(String(255), nullable=False)
+    job_category: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    job_location: Mapped[str] = mapped_column(String(255), nullable=False)
+    job_requirements_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    goal: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    hunt_id: Mapped[str] = mapped_column(String(36), default="", nullable=False)
+    session_id: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    base_match_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    ranking_position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    recommendation_reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    antecedent_signature: Mapped[str] = mapped_column(String(512), default="", nullable=False)
+
+    # Behavior fields
+    behavior_event_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    behavior_event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    resume_id: Mapped[str | None] = mapped_column(String(128))
+
+    # Consequence fields
+    outcome_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    outcome_type: Mapped[str | None] = mapped_column(String(64), index=True)
+    consequence_level: Mapped[str] = mapped_column(String(32), default="unknown", nullable=False)
+    consequence_weight: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    response_time_days: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
+    # Engine state at time of event
+    confidence_at_time: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    strategy_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class ShortTermMemoryRecord(Base):
+    """User short-term memory state (fast decay, half-life: 7 days)."""
+
+    __tablename__ = "short_term_memories"
+
+    user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    recent_interests_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    recent_searches_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    recent_applications_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    recent_goals_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class LongTermMemoryRecord(Base):
+    """User long-term memory state (slow decay, half-life: 90 days)."""
+
+    __tablename__ = "long_term_memories"
+
+    user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    stable_preferences_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    successful_patterns_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    persistent_skills_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class BehavioralPatternRecord(Base):
+    """Discovered recurring behavioral pattern with outcome statistics."""
+
+    __tablename__ = "behavioral_patterns"
+    __table_args__ = (
+        Index("ix_behavioral_patterns_user_sig", "user_id", "antecedent_signature"),
+        Index("ix_behavioral_patterns_confidence", "confidence_score"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    antecedent_signature: Mapped[str] = mapped_column(String(512), nullable=False)
+    antecedent_embedding_json: Mapped[list[float]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    occurrences: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    views: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    clicks: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    saves: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    applies: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    assessments: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    interviews: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    final_rounds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    offers: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rejections: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    acceptances: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    trend_direction: Mapped[str] = mapped_column(
+        String(16), default="stable", nullable=False
+    )
+    last_seen: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class CareerPersonaRecord(Base):
+    """Inferred career persona state for one user."""
+
+    __tablename__ = "career_personas"
+
+    user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    primary_persona: Mapped[str] = mapped_column(
+        String(64), default="explorer", nullable=False
+    )
+    secondary_persona: Mapped[str | None] = mapped_column(String(64))
+    persona_confidence: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    persona_scores_json: Mapped[dict[str, float]] = mapped_column(
+        JSON, default=dict, nullable=False
+    )
+    evolution_history_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class SelfEvaluationRecord(Base):
+    """Self-evaluation metrics and prediction tracking."""
+
+    __tablename__ = "self_evaluations"
+    __table_args__ = (
+        Index("ix_self_evaluations_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    prediction_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    predicted_outcome: Mapped[str] = mapped_column(String(64), nullable=False)
+    predicted_confidence: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    actual_outcome: Mapped[str | None] = mapped_column(String(64))
+    was_correct: Mapped[bool | None] = mapped_column(Boolean)
+    job_id: Mapped[str] = mapped_column(String(128), default="", nullable=False)
+    category: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    evaluated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

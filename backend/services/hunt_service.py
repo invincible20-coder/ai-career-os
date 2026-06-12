@@ -40,9 +40,15 @@ from backend.orchestrator import HuntOrchestrator
 from backend.services.analytics_service import AnalyticsService
 from backend.services.behavior_service import BehaviorService
 from backend.services.abc_service import ABCAdaptiveService
+from backend.services.abc_analytics_service import ABCAnalyticsService
 from backend.services.intelligence_service import IntelligenceService
+from backend.services.memory_service import MemoryService
+from backend.services.pattern_discovery_service import PatternDiscoveryService
+from backend.services.persona_service import PersonaService
 from backend.services.predictive_career_service import PredictiveCareerService
 from backend.services.resume_correlation_service import ResumeCorrelationService
+from backend.services.self_evaluation_service import SelfEvaluationService
+from backend.services.strategy_feedback_service import StrategyFeedbackService
 from backend.services.strategy_service import StrategyService
 from backend.storage.repository import HuntRepository
 
@@ -60,6 +66,13 @@ class HuntService:
     intelligence_service: IntelligenceService
     resume_correlation_service: ResumeCorrelationService
     predictive_career_service: PredictiveCareerService
+    # V2 Behavioral Intelligence services
+    abc_analytics_service: ABCAnalyticsService | None = None
+    memory_service: MemoryService | None = None
+    pattern_service: PatternDiscoveryService | None = None
+    persona_service: PersonaService | None = None
+    self_evaluation_service: SelfEvaluationService | None = None
+    strategy_feedback_service: StrategyFeedbackService | None = None
 
     async def start_hunt(
         self,
@@ -266,3 +279,43 @@ class HuntService:
             user_id=user_id,
             intelligence_state=intelligence_state,
         )
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # V2 Behavioral Intelligence API Methods
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    async def get_abc_analytics(self, user_id: str):
+        """Full behavioral intelligence analytics."""
+        if self.abc_analytics_service is None:
+            return None
+        return await self.abc_analytics_service.build_report(user_id)
+
+    async def get_abc_patterns(self, user_id: str):
+        """Discovered behavioral patterns."""
+        if self.pattern_service is None:
+            return []
+        return await self.pattern_service.discover_patterns(user_id)
+
+    async def get_abc_persona(self, user_id: str):
+        """Current inferred career persona."""
+        if self.persona_service is None:
+            return None
+        return await self.persona_service.get_persona(user_id)
+
+    async def get_abc_memory(self, user_id: str):
+        """Dual memory state."""
+        if self.memory_service is None:
+            return None
+        return await self.memory_service.get_memory_state(user_id)
+
+    async def get_abc_self_evaluation(self, user_id: str):
+        """Engine quality metrics."""
+        if self.self_evaluation_service is None:
+            return None
+        return await self.self_evaluation_service.compute_metrics(user_id)
+
+    async def get_abc_strategy_feedback(self, user_id: str):
+        """Trigger strategy adjustment from ABC signals."""
+        if self.strategy_feedback_service is None:
+            return []
+        return await self.strategy_feedback_service.recommend_strategy_adjustments(user_id)

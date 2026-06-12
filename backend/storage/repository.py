@@ -43,12 +43,16 @@ from backend.models.resume_intelligence import (
 )
 from backend.services.exceptions import NotFoundError, TooManyRequestsError
 from backend.storage.records import (
+    ABCLearningEventRecord,
     ApplicationRecord,
     BehaviorMetricSnapshotRecord,
     BehaviorEventRecord,
+    BehavioralPatternRecord,
+    CareerPersonaRecord,
     ConversationTurnRecord,
     HuntRecord,
     JobRecord,
+    LongTermMemoryRecord,
     OutcomeRecord,
     PredictiveCareerProfileRecord,
     PlanRecord,
@@ -56,6 +60,8 @@ from backend.storage.records import (
     RecommendationEventRecord,
     ResumeCorrelationProfileRecord,
     ResumeFingerprintRecord,
+    SelfEvaluationRecord,
+    ShortTermMemoryRecord,
     StepExecutionRecord,
     UserStrategyProfileRecord,
     UserIntelligenceProfileRecord,
@@ -1256,3 +1262,365 @@ class HuntRepository:
     ) -> int:
         bucket_end = bucket_start + timedelta(seconds=window_seconds)
         return max(1, int((bucket_end - now).total_seconds()))
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # ABC Behavioral Intelligence Engine V2.0 Methods
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    async def save_abc_learning_event(
+        self,
+        *,
+        event_id: str,
+        user_id: str,
+        timestamp: datetime,
+        job_id: str,
+        job_title: str,
+        job_company: str,
+        job_category: str,
+        job_location: str,
+        job_requirements: list[str],
+        goal: str,
+        hunt_id: str,
+        session_id: str,
+        base_match_score: float,
+        ranking_position: int,
+        recommendation_reason: str,
+        antecedent_signature: str,
+        behavior_event_id: str,
+        behavior_event_type: str,
+        resume_id: str | None,
+        outcome_id: str | None,
+        outcome_type: str | None,
+        consequence_level: str,
+        consequence_weight: float,
+        response_time_days: float,
+        confidence_at_time: float,
+        strategy_snapshot: dict,
+    ) -> None:
+        """Append-only write to the immutable learning event store."""
+        async with self.session.begin():
+            self.session.add(
+                ABCLearningEventRecord(
+                    id=event_id,
+                    user_id=user_id,
+                    timestamp=timestamp,
+                    job_id=job_id,
+                    job_title=job_title,
+                    job_company=job_company,
+                    job_category=job_category,
+                    job_location=job_location,
+                    job_requirements_json=job_requirements,
+                    goal=goal,
+                    hunt_id=hunt_id,
+                    session_id=session_id,
+                    base_match_score=base_match_score,
+                    ranking_position=ranking_position,
+                    recommendation_reason=recommendation_reason,
+                    antecedent_signature=antecedent_signature,
+                    behavior_event_id=behavior_event_id,
+                    behavior_event_type=behavior_event_type,
+                    resume_id=resume_id,
+                    outcome_id=outcome_id,
+                    outcome_type=outcome_type,
+                    consequence_level=consequence_level,
+                    consequence_weight=consequence_weight,
+                    response_time_days=response_time_days,
+                    confidence_at_time=confidence_at_time,
+                    strategy_snapshot_json=strategy_snapshot,
+                )
+            )
+
+    async def list_abc_learning_events(
+        self,
+        user_id: str,
+        *,
+        limit: int = 500,
+        since: datetime | None = None,
+    ) -> list[ABCLearningEventRecord]:
+        """Query learning events with optional time filtering."""
+        statement = (
+            select(ABCLearningEventRecord)
+            .where(ABCLearningEventRecord.user_id == user_id)
+        )
+        if since is not None:
+            statement = statement.where(ABCLearningEventRecord.timestamp >= since)
+        statement = (
+            statement.order_by(ABCLearningEventRecord.timestamp.desc())
+            .limit(limit)
+        )
+        records = list((await self.session.scalars(statement)).all())
+        if self.session.in_transaction():
+            await self.session.commit()
+        return list(reversed(records))
+
+    async def count_abc_learning_events(self, user_id: str) -> int:
+        """Count total learning events for a user."""
+        from sqlalchemy import func
+
+        result = await self.session.scalar(
+            select(func.count()).where(ABCLearningEventRecord.user_id == user_id)
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        return result or 0
+
+    # -- Dual Memory --
+
+    async def get_short_term_memory(self, user_id: str) -> ShortTermMemoryRecord | None:
+        record = await self.session.scalar(
+            select(ShortTermMemoryRecord).where(ShortTermMemoryRecord.user_id == user_id)
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        return record
+
+    async def upsert_short_term_memory(
+        self,
+        user_id: str,
+        *,
+        recent_interests: list[dict],
+        recent_searches: list[dict],
+        recent_applications: list[dict],
+        recent_goals: list[dict],
+    ) -> None:
+        for attempt in range(2):
+            try:
+                async with self.session.begin():
+                    await self.session.merge(
+                        ShortTermMemoryRecord(
+                            user_id=user_id,
+                            recent_interests_json=recent_interests,
+                            recent_searches_json=recent_searches,
+                            recent_applications_json=recent_applications,
+                            recent_goals_json=recent_goals,
+                            updated_at=utc_now(),
+                        )
+                    )
+                return
+            except IntegrityError:
+                await self.session.rollback()
+                if attempt == 1:
+                    raise
+
+    async def get_long_term_memory(self, user_id: str) -> LongTermMemoryRecord | None:
+        record = await self.session.scalar(
+            select(LongTermMemoryRecord).where(LongTermMemoryRecord.user_id == user_id)
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        return record
+
+    async def upsert_long_term_memory(
+        self,
+        user_id: str,
+        *,
+        stable_preferences: list[dict],
+        successful_patterns: list[dict],
+        persistent_skills: list[dict],
+    ) -> None:
+        for attempt in range(2):
+            try:
+                async with self.session.begin():
+                    await self.session.merge(
+                        LongTermMemoryRecord(
+                            user_id=user_id,
+                            stable_preferences_json=stable_preferences,
+                            successful_patterns_json=successful_patterns,
+                            persistent_skills_json=persistent_skills,
+                            updated_at=utc_now(),
+                        )
+                    )
+                return
+            except IntegrityError:
+                await self.session.rollback()
+                if attempt == 1:
+                    raise
+
+    # -- Behavioral Patterns --
+
+    async def get_behavioral_pattern(
+        self,
+        user_id: str,
+        antecedent_signature: str,
+    ) -> BehavioralPatternRecord | None:
+        record = await self.session.scalar(
+            select(BehavioralPatternRecord)
+            .where(BehavioralPatternRecord.user_id == user_id)
+            .where(BehavioralPatternRecord.antecedent_signature == antecedent_signature)
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        return record
+
+    async def upsert_behavioral_pattern(
+        self,
+        *,
+        pattern_id: str,
+        user_id: str,
+        antecedent_signature: str,
+        antecedent_embedding: list[float],
+        occurrences: int,
+        views: int,
+        clicks: int,
+        saves: int,
+        applies: int,
+        assessments: int,
+        interviews: int,
+        final_rounds: int,
+        offers: int,
+        rejections: int,
+        acceptances: int,
+        confidence_score: float,
+        trend_direction: str,
+    ) -> None:
+        for attempt in range(2):
+            try:
+                async with self.session.begin():
+                    now = utc_now()
+                    await self.session.merge(
+                        BehavioralPatternRecord(
+                            id=pattern_id,
+                            user_id=user_id,
+                            antecedent_signature=antecedent_signature,
+                            antecedent_embedding_json=antecedent_embedding,
+                            occurrences=occurrences,
+                            views=views,
+                            clicks=clicks,
+                            saves=saves,
+                            applies=applies,
+                            assessments=assessments,
+                            interviews=interviews,
+                            final_rounds=final_rounds,
+                            offers=offers,
+                            rejections=rejections,
+                            acceptances=acceptances,
+                            confidence_score=confidence_score,
+                            trend_direction=trend_direction,
+                            last_seen=now,
+                        )
+                    )
+                return
+            except IntegrityError:
+                await self.session.rollback()
+                if attempt == 1:
+                    raise
+
+    async def list_behavioral_patterns(
+        self,
+        user_id: str,
+        *,
+        min_confidence: float = 0.0,
+        limit: int = 50,
+    ) -> list[BehavioralPatternRecord]:
+        statement = (
+            select(BehavioralPatternRecord)
+            .where(BehavioralPatternRecord.user_id == user_id)
+            .where(BehavioralPatternRecord.confidence_score >= min_confidence)
+            .order_by(BehavioralPatternRecord.confidence_score.desc())
+            .limit(limit)
+        )
+        records = list((await self.session.scalars(statement)).all())
+        if self.session.in_transaction():
+            await self.session.commit()
+        return records
+
+    # -- Career Persona --
+
+    async def get_career_persona(self, user_id: str) -> CareerPersonaRecord | None:
+        record = await self.session.scalar(
+            select(CareerPersonaRecord).where(CareerPersonaRecord.user_id == user_id)
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        return record
+
+    async def upsert_career_persona(
+        self,
+        *,
+        user_id: str,
+        primary_persona: str,
+        secondary_persona: str | None,
+        persona_confidence: float,
+        persona_scores: dict[str, float],
+        evolution_history: list[dict],
+    ) -> None:
+        for attempt in range(2):
+            try:
+                async with self.session.begin():
+                    await self.session.merge(
+                        CareerPersonaRecord(
+                            user_id=user_id,
+                            primary_persona=primary_persona,
+                            secondary_persona=secondary_persona,
+                            persona_confidence=persona_confidence,
+                            persona_scores_json=persona_scores,
+                            evolution_history_json=evolution_history,
+                            updated_at=utc_now(),
+                        )
+                    )
+                return
+            except IntegrityError:
+                await self.session.rollback()
+                if attempt == 1:
+                    raise
+
+    # -- Self-Evaluation --
+
+    async def save_self_evaluation(
+        self,
+        *,
+        user_id: str,
+        prediction_id: str,
+        predicted_outcome: str,
+        predicted_confidence: float,
+        job_id: str,
+        category: str,
+    ) -> None:
+        async with self.session.begin():
+            self.session.add(
+                SelfEvaluationRecord(
+                    user_id=user_id,
+                    prediction_id=prediction_id,
+                    predicted_outcome=predicted_outcome,
+                    predicted_confidence=predicted_confidence,
+                    job_id=job_id,
+                    category=category,
+                )
+            )
+
+    async def evaluate_prediction(
+        self,
+        prediction_id: str,
+        *,
+        actual_outcome: str,
+        was_correct: bool,
+    ) -> None:
+        async with self.session.begin():
+            record = await self.session.scalar(
+                select(SelfEvaluationRecord)
+                .where(SelfEvaluationRecord.prediction_id == prediction_id)
+            )
+            if record is not None:
+                record.actual_outcome = actual_outcome
+                record.was_correct = was_correct
+                record.evaluated_at = utc_now()
+
+    async def list_self_evaluations(
+        self,
+        user_id: str,
+        *,
+        limit: int = 100,
+    ) -> list[SelfEvaluationRecord]:
+        records = list(
+            (
+                await self.session.scalars(
+                    select(SelfEvaluationRecord)
+                    .where(SelfEvaluationRecord.user_id == user_id)
+                    .order_by(SelfEvaluationRecord.created_at.desc())
+                    .limit(limit)
+                )
+            ).all()
+        )
+        if self.session.in_transaction():
+            await self.session.commit()
+        return list(reversed(records))
